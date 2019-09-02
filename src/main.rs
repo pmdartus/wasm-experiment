@@ -19,15 +19,43 @@ fn main() -> io::Result<()> {
 
 const SECTION_ID_CUSTOM: u8 = 0;
 const SECTION_ID_TYPE: u8 = 1;
+const SECTION_ID_IMPORT: u8 = 2;
+const SECTION_ID_FUNCTION: u8 = 3;
+const SECTION_ID_TABLE: u8 = 4;
+const SECTION_ID_MEMORY: u8 = 5;
+const SECTION_ID_GLOBAL: u8 = 6;
+const SECTION_ID_EXPORT: u8 = 7;
+const SECTION_ID_START: u8 = 8;
+const SECTION_ID_ELEMENT: u8 = 9;
+const SECTION_ID_CODE: u8 = 10;
+const SECTION_ID_DATA: u8 = 11;
 
 enum ValueType {
     I32,
     I64,
     F32,
-    F64
+    F64,
 }
 
 type FunctionType = (Vec<ValueType>, Vec<ValueType>);
+
+struct Limits {
+    min: u32,
+    max: Option<u32>,
+}
+
+enum ElementType {
+    FuncRef,
+}
+
+struct TableType {
+    limits: Limits,
+    element_type: ElementType,
+}
+
+struct Table {
+    table_type: TableType,
+}
 
 struct Decoder {
     bytes: Vec<u8>,
@@ -35,23 +63,23 @@ struct Decoder {
 }
 
 impl Decoder {
-    fn eatByte(&mut self) -> u8 {
-        let ret = self.pickByte();
+    fn eat_byte(&mut self) -> u8 {
+        let ret = self.pick_byte();
         self.offset += 1;
         ret
     }
 
-    fn pickByte(&self) -> u8 {
+    fn pick_byte(&self) -> u8 {
         self.bytes[self.offset]
     }
 }
 
-fn decode_unsigned_leb_128(mut decoder: &Decoder) -> u64 {
+fn decode_unsigned_leb_128(decoder: &mut Decoder) -> u64 {
     let mut result: u64 = 0;
     let mut shift: u32 = 0;
 
     loop {
-        let byte = decoder.eatByte() as u64;
+        let byte = decoder.eat_byte() as u64;
 
         // Extract the low order 7 bits of byte, left shift the byte and add them to the current
         // result.
@@ -63,7 +91,7 @@ fn decode_unsigned_leb_128(mut decoder: &Decoder) -> u64 {
         // Repeat until the highest order bit (0x80) is 0.
         if (byte & 0x80) != 0x80 {
             break;
-        } 
+        }
     }
 
     // TODO: validate
@@ -71,31 +99,49 @@ fn decode_unsigned_leb_128(mut decoder: &Decoder) -> u64 {
     result
 }
 
+fn decode_u32(decoder: &mut Decoder) -> u32 {
+    decode_unsigned_leb_128(decoder) as u32
+}
+
+fn decoder_limits(decoder: &mut Decoder) -> Limits {
+    match decoder.eat_byte() {
+        0x00 => Limits {
+            min: decode_u32(decoder),
+            max: None,
+        },
+        0x01 => Limits {
+            min: decode_u32(decoder),
+            max: Some(decode_u32(decoder)),
+        },
+        _ => panic!("Invalid limit"),
+    }
+}
+
 /// https://webassembly.github.io/spec/core/binary/types.html#value-types
-fn decode_value_type(mut decoder: &Decoder) -> ValueType {
-    match decoder.eatByte() {
+fn decode_value_type(decoder: &mut Decoder) -> ValueType {
+    match decoder.eat_byte() {
         0x7F => ValueType::F32,
         0x7E => ValueType::I64,
         0x7D => ValueType::F32,
         0x7C => ValueType::F64,
-        _ => panic!("Invalid value type")
+        _ => panic!("Invalid value type"),
     }
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-functype
-fn decode_function_type(mut decoder: &Decoder) -> FunctionType {
-    assert!(decoder.eatByte() == 0x60, "Invalid function type prefix");
+fn decode_function_type(decoder: &mut Decoder) -> FunctionType {
+    assert!(decoder.eat_byte() == 0x60, "Invalid function type prefix");
 
     let mut params = Vec::new();
     let mut results = Vec::new();
 
-    let params_vector_size = decode_unsigned_leb_128(decoder);
+    let params_vector_size = decode_u32(decoder);
     for _ in 0..params_vector_size {
         let value_type = decode_value_type(decoder);
         params.push(value_type);
     }
 
-    let results_vector_size = decode_unsigned_leb_128(decoder);
+    let results_vector_size = decode_u32(decoder);
     for _ in 0..results_vector_size {
         let value_type = decode_value_type(decoder);
         results.push(value_type);
@@ -105,18 +151,26 @@ fn decode_function_type(mut decoder: &Decoder) -> FunctionType {
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#custom-section
-fn decode_custom_section() {
-    panic!("Missing implementation");
+fn decode_custom_sections(decoder: &mut Decoder) {
+    while decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decoder.eat_byte(); // section id
+
+        // Consume the section content
+        let section_size = decode_u32(decoder);
+        for _i in 0..section_size {
+            decoder.eat_byte();
+        }
+    }
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#type-section
-fn decode_type_section(mut decoder: &Decoder) -> Vec<FunctionType> {
-    decoder.eatByte(); // section id
-    decoder.eatByte(); // section size
+fn decode_function_type_section(decoder: &mut Decoder) -> Vec<FunctionType> {
+    decoder.eat_byte(); // section id
+    decoder.eat_byte(); // section size
 
     let mut function_types = Vec::new();
 
-    let vector_size = decode_unsigned_leb_128(decoder);
+    let vector_size = decode_u32(decoder);
     for _ in 0..vector_size {
         let function_type = decode_function_type(decoder);
         function_types.push(function_type);
@@ -125,28 +179,104 @@ fn decode_type_section(mut decoder: &Decoder) -> Vec<FunctionType> {
     function_types
 }
 
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-importsec
+fn decode_import_section() {
+    panic!("Not implemented");
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-funcsec
+fn decode_function_section(decoder: &mut Decoder) -> Vec<u32> {
+    decoder.eat_byte(); // section id
+    decoder.eat_byte(); // section size
+
+    let mut type_indexes = Vec::new();
+
+    let vector_size = decode_u32(decoder);
+    for _ in 0..vector_size {
+        let type_index = decode_u32(decoder);
+        type_indexes.push(type_index);
+    }
+
+    type_indexes
+}
+
+/// https://webassembly.github.io/spec/core/binary/types.html#binary-tabletype
+fn decode_table_type(decoder: &mut Decoder) -> TableType {
+    let element_type = match decoder.eat_byte() {
+        0x70 => ElementType::FuncRef,
+        _ => panic!("Invalid element type"),
+    };
+
+    let limits = decoder_limits(decoder);
+
+    TableType {
+        element_type: element_type,
+        limits: limits,
+    }
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-tablesec
+fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
+    decoder.eat_byte(); // section id
+    decoder.eat_byte(); // section size
+
+    let mut tables = Vec::new();
+
+    let vector_size = decode_u32(decoder);
+    for _ in 0..vector_size {
+        let table_type = decode_table_type(decoder);
+        tables.push(Table {
+            table_type: table_type,
+        });
+    }
+
+    tables
+}
+
 /// https://webassembly.github.io/spec/core/binary/modules.html
 fn decode(bytes: Vec<u8>) -> () {
-    let mut decoder = Decoder { bytes: bytes, offset: 0 };
+    let mut decoder = Decoder {
+        bytes: bytes,
+        offset: 0,
+    };
 
     assert!(
-        decoder.eatByte() == 0x00
-            && decoder.eatByte() == 0x61
-            && decoder.eatByte() == 0x73
-            && decoder.eatByte() == 0x6d,
+        decoder.eat_byte() == 0x00
+            && decoder.eat_byte() == 0x61
+            && decoder.eat_byte() == 0x73
+            && decoder.eat_byte() == 0x6d,
         "Invalid magic string"
     );
     assert!(
-        decoder.eatByte() == 0x01
-            && decoder.eatByte() == 0x00
-            && decoder.eatByte() == 0x00
-            && decoder.eatByte() == 0x00,
+        decoder.eat_byte() == 0x01
+            && decoder.eat_byte() == 0x00
+            && decoder.eat_byte() == 0x00
+            && decoder.eat_byte() == 0x00,
         "Invalid version number"
     );
 
-    if decoder.pickByte() == SECTION_ID_CUSTOM {
-        decode_custom_section();
-    } else if decoder.pickByte() == SECTION_ID_TYPE {
-        decode_type_section(&decoder);
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_TYPE {
+        decode_function_type_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_IMPORT {
+        decode_import_section();
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_FUNCTION {
+        decode_function_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_TABLE {
+        decode_table_section(&mut decoder);
     }
 }
