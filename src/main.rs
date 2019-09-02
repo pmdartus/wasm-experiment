@@ -48,13 +48,36 @@ enum ElementType {
     FuncRef,
 }
 
+struct MemoryType {
+    limits: Limits,
+}
+
 struct TableType {
     limits: Limits,
     element_type: ElementType,
 }
 
+enum GlobalTypeMutability {
+    Const,
+    Var,
+}
+
+struct GlobalType {
+    value_type: ValueType,
+    mutability: GlobalTypeMutability,
+}
+
 struct Table {
     table_type: TableType,
+}
+
+struct Memory {
+    memory_type: MemoryType,
+}
+
+struct Global {
+    global_type: GlobalType,
+    // TODO: expression:
 }
 
 struct Decoder {
@@ -103,7 +126,8 @@ fn decode_u32(decoder: &mut Decoder) -> u32 {
     decode_unsigned_leb_128(decoder) as u32
 }
 
-fn decoder_limits(decoder: &mut Decoder) -> Limits {
+/// https://webassembly.github.io/spec/core/binary/types.html#limits
+fn decode_limits(decoder: &mut Decoder) -> Limits {
     match decoder.eat_byte() {
         0x00 => Limits {
             min: decode_u32(decoder),
@@ -148,6 +172,18 @@ fn decode_function_type(decoder: &mut Decoder) -> FunctionType {
     }
 
     (params, results)
+}
+
+/// https://webassembly.github.io/spec/core/binary/types.html#binary-globaltype
+fn decode_global_type(decoder: &mut Decoder) -> GlobalType {
+    GlobalType {
+        value_type: decode_value_type(decoder),
+        mutability: match decoder.eat_byte() {
+            0x00 => GlobalTypeMutability::Const,
+            0x01 => GlobalTypeMutability::Var,
+            _ => panic!("Invalid global type mutability"),
+        },
+    }
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#custom-section
@@ -207,7 +243,7 @@ fn decode_table_type(decoder: &mut Decoder) -> TableType {
         _ => panic!("Invalid element type"),
     };
 
-    let limits = decoder_limits(decoder);
+    let limits = decode_limits(decoder);
 
     TableType {
         element_type: element_type,
@@ -231,6 +267,67 @@ fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
     }
 
     tables
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-memsec
+fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
+    decoder.eat_byte(); // section id
+    decoder.eat_byte(); // section size
+
+    let mut memories = Vec::new();
+
+    let vector_size = decode_u32(decoder);
+    for _ in 0..vector_size {
+        let limits = decode_limits(decoder);
+        memories.push(Memory {
+            memory_type: MemoryType { limits: limits },
+        });
+    }
+
+    memories
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-globalsec
+fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
+    decoder.eat_byte(); // section id
+    decoder.eat_byte(); // section size
+
+    let mut globals = Vec::new();
+
+    let vector_size = decode_u32(decoder);
+    for _ in 0..vector_size {
+        let global_type = decode_global_type(decoder);
+        globals.push(Global {
+            global_type: global_type,
+        });
+    }
+
+    globals
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#binary-exportsec
+fn decode_export_section(decoder: &mut Decoder) {
+    panic!("Not implemented");
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#start-section
+fn decode_start_section(decoder: &mut Decoder) {
+    panic!("Not implemented");
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#element-section
+fn decode_element_section(decoder: &mut Decoder) {
+    panic!("Not implemented");
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#code-section
+fn decode_code_section(decoder: &mut Decoder) {
+    panic!("Not implemented");
+}
+
+/// https://webassembly.github.io/spec/core/binary/modules.html#data-section
+fn decode_data_section(decoder: &mut Decoder) {
+    panic!("Not implemented");
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html
@@ -278,5 +375,50 @@ fn decode(bytes: Vec<u8>) -> () {
     }
     if decoder.pick_byte() == SECTION_ID_TABLE {
         decode_table_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_MEMORY {
+        decode_memory_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_GLOBAL {
+        decode_global_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_EXPORT {
+        decode_export_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_START {
+        decode_start_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_ELEMENT {
+        decode_element_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CODE {
+        decode_code_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_DATA {
+        decode_data_section(&mut decoder);
+    }
+    if decoder.pick_byte() == SECTION_ID_CUSTOM {
+        decode_custom_sections(&mut decoder);
     }
 }
