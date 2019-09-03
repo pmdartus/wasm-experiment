@@ -149,7 +149,7 @@ struct Import {
 #[derive(Debug, Copy, Clone)]
 enum BlockType {
     Void,
-    Return(ValueType)
+    Return(ValueType),
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -372,15 +372,14 @@ struct Decoder {
 
 impl Decoder {
     fn eat_byte(&mut self) -> u8 {
-        let ret = self.pick_byte()
-            .expect("Unexpected end of file");
+        let ret = self.pick_byte().expect("Unexpected end of file");
 
         self.offset += 1;
         ret
     }
 
     fn pick_byte(&self) -> Option<u8> {
-        if self.bytes.len() < self.offset {
+        if self.offset < self.bytes.len() {
             Some(self.bytes[self.offset])
         } else {
             None
@@ -548,7 +547,7 @@ fn decode_global_type(decoder: &mut Decoder) -> GlobalType {
 fn decode_block_type(decoder: &mut Decoder) -> BlockType {
     match decoder.eat_byte() {
         0x40 => BlockType::Void,
-        _ => BlockType::Return(decode_value_type(decoder))
+        _ => BlockType::Return(decode_value_type(decoder)),
     }
 }
 
@@ -567,7 +566,6 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
         0x01 => Instruction::Nop,
         0x02 => {
             let block_type = decode_block_type(decoder);
-            
             let mut instructions = Vec::new();
             while decoder.pick_byte().unwrap() != 0x0B {
                 instructions.push(decode_instruction(decoder));
@@ -575,7 +573,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
 
             decoder.eat_byte(); // end
             Instruction::Block(block_type, instructions)
-        },
+        }
         0x03 => {
             let block_type = decode_block_type(decoder);
 
@@ -586,7 +584,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
 
             decoder.eat_byte(); // end
             Instruction::Loop(block_type, instructions)
-        },
+        }
         0x04 => {
             let block_type = decode_block_type(decoder);
 
@@ -609,7 +607,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
 
             decoder.eat_byte(); // end
             Instruction::If(block_type, if_instructions, else_instructions)
-        },
+        }
         0x0C => Instruction::Br(Index::Label(decode_u32(decoder))),
         0x0D => Instruction::BrIf(Index::Label(decode_u32(decoder))),
         0x0E => {
@@ -623,7 +621,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
             let default_label = Index::Label(decode_u32(decoder));
 
             Instruction::BrTable(labels, default_label)
-        },
+        }
         0x0F => Instruction::Return,
         0x10 => Instruction::Call(Index::Function(decode_u32(decoder))),
         0x11 => Instruction::CallIndirect(Index::Function(decode_u32(decoder))),
@@ -793,7 +791,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
         0xbe => Instruction::F32ReinterpretI32,
         0xbf => Instruction::F64ReinterpretI64,
 
-        _ => panic!("Invalid instruction")
+        _ => panic!("Invalid instruction"),
     }
 }
 
@@ -808,6 +806,30 @@ fn decode_expression(decoder: &mut Decoder) -> Expression {
     decoder.eat_byte(); // end
 
     instructions
+}
+
+fn decode_section<F>(decoder: &mut Decoder, section_id: u8, mut callback: F)
+ where F: FnMut(&mut Decoder) {
+     if decoder.pick_byte().unwrap() == section_id {
+        decoder.eat_byte(); // section id
+        
+        let size = decode_u32(decoder);
+        let offset = decoder.offset + size as usize;
+
+        // Find a better way to avoid having to clone the bytes for each decoder.
+        let mut closure_decoder = Decoder {
+            bytes: decoder.bytes.clone(),
+            offset: decoder.offset,
+        };
+
+        callback(&mut closure_decoder);
+
+        if closure_decoder.offset != offset {
+            panic!("Invalid section size");
+        }
+
+        decoder.offset = closure_decoder.offset;
+    }
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#custom-section
@@ -825,40 +847,42 @@ fn decode_custom_sections(decoder: &mut Decoder) {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#type-section
 fn decode_function_type_section(decoder: &mut Decoder) -> Vec<FunctionType> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut function_types = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        let function_type = decode_function_type(decoder);
-        function_types.push(function_type);
-    }
+    decode_section(decoder, SECTION_ID_TYPE, |decoder| {
+        let vector_size = decode_u32(decoder);
+        
+        for _ in 0..vector_size {
+            let function_type = decode_function_type(decoder);
+            function_types.push(function_type);
+        }
+    });
 
     function_types
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-importsec
 fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut imports = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        imports.push(Import {
-            module: decode_name(decoder),
-            name: decode_name(decoder),
-            descriptor: match decoder.eat_byte() {
-                0x00 => Index::Type(decode_u32(decoder)),
-                0x01 => Index::Table(decode_u32(decoder)),
-                0x02 => Index::Memory(decode_u32(decoder)),
-                0x03 => Index::Global(decode_u32(decoder)),
-                _ => panic!("Invalid import descriptor"),
-            },
-        })
+    if decoder.pick_byte().unwrap() == SECTION_ID_IMPORT {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
+
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            imports.push(Import {
+                module: decode_name(decoder),
+                name: decode_name(decoder),
+                descriptor: match decoder.eat_byte() {
+                    0x00 => Index::Type(decode_u32(decoder)),
+                    0x01 => Index::Table(decode_u32(decoder)),
+                    0x02 => Index::Memory(decode_u32(decoder)),
+                    0x03 => Index::Global(decode_u32(decoder)),
+                    _ => panic!("Invalid import descriptor"),
+                },
+            })
+        }
     }
 
     imports
@@ -866,15 +890,17 @@ fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-funcsec
 fn decode_function_section(decoder: &mut Decoder) -> Vec<Index> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut type_indexes = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        let type_index = Index::Type(decode_u32(decoder));
-        type_indexes.push(type_index);
+    if decoder.pick_byte().unwrap() == SECTION_ID_FUNCTION {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
+
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            let type_index = Index::Type(decode_u32(decoder));
+            type_indexes.push(type_index);
+        }
     }
 
     type_indexes
@@ -897,17 +923,19 @@ fn decode_table_type(decoder: &mut Decoder) -> TableType {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-tablesec
 fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut tables = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        let table_type = decode_table_type(decoder);
-        tables.push(Table {
-            table_type: table_type,
-        });
+    if decoder.pick_byte().unwrap() == SECTION_ID_TABLE {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
+
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            let table_type = decode_table_type(decoder);
+            tables.push(Table {
+                table_type: table_type,
+            });
+        }
     }
 
     tables
@@ -915,17 +943,19 @@ fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-memsec
 fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut memories = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        let limits = decode_limits(decoder);
-        memories.push(Memory {
-            memory_type: MemoryType { limits: limits },
-        });
+    if decoder.pick_byte().unwrap() == SECTION_ID_MEMORY {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
+
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            let limits = decode_limits(decoder);
+            memories.push(Memory {
+                memory_type: MemoryType { limits: limits },
+            });
+        }
     }
 
     memories
@@ -933,17 +963,19 @@ fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-globalsec
 fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut globals = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        globals.push(Global {
-            global_type: decode_global_type(decoder),
-            init: decode_expression(decoder),
-        });
+    if decoder.pick_byte().unwrap() == SECTION_ID_GLOBAL {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
+
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            globals.push(Global {
+                global_type: decode_global_type(decoder),
+                init: decode_expression(decoder),
+            });
+        }
     }
 
     globals
@@ -951,63 +983,71 @@ fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-exportsec
 fn decode_export_section(decoder: &mut Decoder) -> Vec<Export> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut exports = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        exports.push(Export {
-            name: decode_name(decoder),
-            descriptor: match decoder.eat_byte() {
-                0x00 => Index::Type(decode_u32(decoder)),
-                0x01 => Index::Table(decode_u32(decoder)),
-                0x02 => Index::Memory(decode_u32(decoder)),
-                0x03 => Index::Global(decode_u32(decoder)),
-                _ => panic!("Invalid export descriptor"),
-            },
-        })
+    if decoder.pick_byte().unwrap() == SECTION_ID_EXPORT {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
+
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            exports.push(Export {
+                name: decode_name(decoder),
+                descriptor: match decoder.eat_byte() {
+                    0x00 => Index::Type(decode_u32(decoder)),
+                    0x01 => Index::Table(decode_u32(decoder)),
+                    0x02 => Index::Memory(decode_u32(decoder)),
+                    0x03 => Index::Global(decode_u32(decoder)),
+                    _ => panic!("Invalid export descriptor"),
+                },
+            })
+        }
     }
 
     exports
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#start-section
-fn decode_start_section(decoder: &mut Decoder) -> StartFunction {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
+fn decode_start_section(decoder: &mut Decoder) -> Option<StartFunction> {
+    if decoder.pick_byte().unwrap() == SECTION_ID_START {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
 
-    StartFunction {
-        function: Index::Function(decode_u32(decoder)),
+        Some(StartFunction {
+            function: Index::Function(decode_u32(decoder)),
+        })
+    } else {
+        None
     }
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#element-section
 fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut elements = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        let table = Index::Table(decode_u32(decoder));
+    if decoder.pick_byte().unwrap() == SECTION_ID_ELEMENT {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
 
-        let offset = decode_expression(decoder);
-
-        let mut init = Vec::new();
         let vector_size = decode_u32(decoder);
-
         for _ in 0..vector_size {
-            init.push(Index::Function(decode_u32(decoder)));
-        }
+            let table = Index::Table(decode_u32(decoder));
 
-        elements.push(Element {
-            table: table,
-            offset: offset,
-            init: init,
-        });
+            let offset = decode_expression(decoder);
+
+            let mut init = Vec::new();
+            let vector_size = decode_u32(decoder);
+
+            for _ in 0..vector_size {
+                init.push(Index::Function(decode_u32(decoder)));
+            }
+
+            elements.push(Element {
+                table: table,
+                offset: offset,
+                init: init,
+            });
+        }
     }
 
     elements
@@ -1015,30 +1055,32 @@ fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#code-section
 fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression)> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut codes = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        decoder.eat_byte(); // code size
+    if decoder.pick_byte().unwrap() == SECTION_ID_CODE {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
 
-        let mut locals = Vec::new();
-        let local_vector_size = decode_u32(decoder);
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            decoder.eat_byte(); // code size
 
-        for _ in 0..local_vector_size {
-            let local_count = decode_u32(decoder);
-            let value_type = decode_value_type(decoder);
+            let mut locals = Vec::new();
+            let local_vector_size = decode_u32(decoder);
 
-            for _ in 0..local_count {
-                locals.push(value_type)
+            for _ in 0..local_vector_size {
+                let local_count = decode_u32(decoder);
+                let value_type = decode_value_type(decoder);
+
+                for _ in 0..local_count {
+                    locals.push(value_type)
+                }
             }
+
+            let expression = decode_expression(decoder);
+
+            codes.push((locals, expression))
         }
-
-        let expression = decode_expression(decoder);
-
-        codes.push((locals, expression))
     }
 
     codes
@@ -1046,28 +1088,30 @@ fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#data-section
 fn decode_data_section(decoder: &mut Decoder) -> Vec<Data> {
-    decoder.eat_byte(); // section id
-    decoder.eat_byte(); // section size
-
     let mut datas = Vec::new();
 
-    let vector_size = decode_u32(decoder);
-    for _ in 0..vector_size {
-        let data = Index::Memory(decode_u32(decoder));
-        let offset = decode_expression(decoder);
+    if decoder.pick_byte().unwrap() == SECTION_ID_DATA {
+        decoder.eat_byte(); // section id
+        decoder.eat_byte(); // section size
 
-        let mut init = Vec::new();
-        let init_vector_size = decode_u32(decoder);
+        let vector_size = decode_u32(decoder);
+        for _ in 0..vector_size {
+            let data = Index::Memory(decode_u32(decoder));
+            let offset = decode_expression(decoder);
 
-        for _ in 0..init_vector_size {
-            init.push(decoder.eat_byte())
+            let mut init = Vec::new();
+            let init_vector_size = decode_u32(decoder);
+
+            for _ in 0..init_vector_size {
+                init.push(decoder.eat_byte())
+            }
+
+            datas.push(Data {
+                data: data,
+                offset: offset,
+                init: init,
+            })
         }
-
-        datas.push(Data {
-            data: data,
-            offset: offset,
-            init: init,
-        })
     }
 
     datas
@@ -1095,110 +1139,32 @@ fn decode(bytes: Vec<u8>) -> Module {
         "Invalid version number"
     );
 
+    println!("1");
+
     // TODO: Collect custom sections
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let function_types = if decoder.pick_byte().unwrap() == SECTION_ID_TYPE {
-        decode_function_type_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let imports = if decoder.pick_byte().unwrap() == SECTION_ID_IMPORT {
-        decode_import_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let function_type_indexes = if decoder.pick_byte().unwrap() == SECTION_ID_FUNCTION {
-        decode_function_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let tables = if decoder.pick_byte().unwrap() == SECTION_ID_TABLE {
-        decode_table_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let memories = if decoder.pick_byte().unwrap() == SECTION_ID_MEMORY {
-        decode_memory_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let globals = if decoder.pick_byte().unwrap() == SECTION_ID_GLOBAL {
-        decode_global_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let exports = if decoder.pick_byte().unwrap() == SECTION_ID_EXPORT {
-        decode_export_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let start = if decoder.pick_byte().unwrap() == SECTION_ID_START {
-        Some(decode_start_section(&mut decoder))
-    } else {
-        None
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let elements = if decoder.pick_byte().unwrap() == SECTION_ID_ELEMENT {
-        decode_element_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let codes = if decoder.pick_byte().unwrap() == SECTION_ID_CODE {
-        decode_code_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
-    let data = if decoder.pick_byte().unwrap() == SECTION_ID_DATA {
-        decode_data_section(&mut decoder)
-    } else {
-        Vec::new()
-    };
-
-    if decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decode_custom_sections(&mut decoder);
-    }
+    decode_custom_sections(&mut decoder);
+    let function_types = decode_function_type_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let imports = decode_import_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let function_type_indexes = decode_function_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let tables = decode_table_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let memories = decode_memory_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let globals = decode_global_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let exports = decode_export_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let start = decode_start_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let elements = decode_element_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let codes = decode_code_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
+    let data = decode_data_section(&mut decoder);
+    decode_custom_sections(&mut decoder);
 
     if decoder.offset != decoder.bytes.len() {
         panic!("Unexpected end of file");
