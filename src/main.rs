@@ -1,7 +1,3 @@
-// TODO: Remove once all the properties are exposed.
-// Right now there is a lot of warnings because the struct properties are never used.
-#![allow(dead_code)]
-
 use std::env;
 use std::fs;
 use std::io;
@@ -16,7 +12,9 @@ fn main() -> io::Result<()> {
 
     // Error handling
     let file = fs::read(filename)?;
-    decode(file);
+    let module = decode(file);
+
+    println!("{:#?}", module);
 
     Ok(())
 }
@@ -385,6 +383,16 @@ impl Decoder {
             None
         }
     }
+
+    fn match_byte(&mut self, expected: u8) -> bool {
+        match self.pick_byte() {
+            Some(actual) if actual == expected => {
+                self.offset += 1;
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 fn decode_unsigned_leb_128(decoder: &mut Decoder) -> u64 {
@@ -426,11 +434,11 @@ fn decode_i64(decoder: &mut Decoder) -> i64 {
     decode_unsigned_leb_128(decoder) as i64
 }
 
-fn decode_f32(decoder: &mut Decoder) -> f32 {
+fn decode_f32(_decoder: &mut Decoder) -> f32 {
     panic!("Not implemented")
 }
 
-fn decode_f64(decoder: &mut Decoder) -> f64 {
+fn decode_f64(_decoder: &mut Decoder) -> f64 {
     panic!("Not implemented")
 }
 
@@ -633,7 +641,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
         0x21 => Instruction::LocalSet(Index::Local(decode_u32(decoder))),
         0x22 => Instruction::LocalTee(Index::Local(decode_u32(decoder))),
         0x23 => Instruction::GlobalGet(Index::Global(decode_u32(decoder))),
-        0x24 => Instruction::GlobalGet(Index::Global(decode_u32(decoder))),
+        0x24 => Instruction::GlobalSet(Index::Global(decode_u32(decoder))),
 
         0x28 => Instruction::I32Load(decode_memory_arg(decoder)),
         0x29 => Instruction::I64Load(decode_memory_arg(decoder)),
@@ -658,6 +666,8 @@ fn decode_instruction(decoder: &mut Decoder) -> Instruction {
         0x3c => Instruction::I64Store8(decode_memory_arg(decoder)),
         0x3d => Instruction::I64Store16(decode_memory_arg(decoder)),
         0x3e => Instruction::I64Store32(decode_memory_arg(decoder)),
+        0x3f => Instruction::MemorySize,
+        0x40 => Instruction::MemoryGrow,
 
         0x41 => Instruction::I32Const(decode_i32(decoder)),
         0x42 => Instruction::I64Const(decode_i64(decoder)),
@@ -809,10 +819,11 @@ fn decode_expression(decoder: &mut Decoder) -> Expression {
 }
 
 fn decode_section<F>(decoder: &mut Decoder, section_id: u8, mut callback: F)
- where F: FnMut(&mut Decoder) {
-     if decoder.pick_byte().unwrap() == section_id {
+where
+    F: FnMut(&mut Decoder),
+{
+    if decoder.pick_byte().unwrap() == section_id {
         decoder.eat_byte(); // section id
-        
         let size = decode_u32(decoder);
         let offset = decoder.offset + size as usize;
 
@@ -834,10 +845,7 @@ fn decode_section<F>(decoder: &mut Decoder, section_id: u8, mut callback: F)
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#custom-section
 fn decode_custom_sections(decoder: &mut Decoder) {
-    while decoder.pick_byte().unwrap() == SECTION_ID_CUSTOM {
-        decoder.eat_byte(); // section id
-
-        // Consume the section content
+    while decoder.match_byte(SECTION_ID_CUSTOM) {
         let section_size = decode_u32(decoder);
         for _i in 0..section_size {
             decoder.eat_byte();
@@ -851,7 +859,6 @@ fn decode_function_type_section(decoder: &mut Decoder) -> Vec<FunctionType> {
 
     decode_section(decoder, SECTION_ID_TYPE, |decoder| {
         let vector_size = decode_u32(decoder);
-        
         for _ in 0..vector_size {
             let function_type = decode_function_type(decoder);
             function_types.push(function_type);
@@ -865,8 +872,7 @@ fn decode_function_type_section(decoder: &mut Decoder) -> Vec<FunctionType> {
 fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
     let mut imports = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_IMPORT {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_IMPORT) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -892,8 +898,7 @@ fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
 fn decode_function_section(decoder: &mut Decoder) -> Vec<Index> {
     let mut type_indexes = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_FUNCTION {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_FUNCTION) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -925,8 +930,7 @@ fn decode_table_type(decoder: &mut Decoder) -> TableType {
 fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
     let mut tables = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_TABLE {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_TABLE) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -945,8 +949,7 @@ fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
 fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
     let mut memories = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_MEMORY {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_MEMORY) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -965,8 +968,7 @@ fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
 fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
     let mut globals = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_GLOBAL {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_GLOBAL) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -985,8 +987,7 @@ fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
 fn decode_export_section(decoder: &mut Decoder) -> Vec<Export> {
     let mut exports = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_EXPORT {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_EXPORT) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -1009,8 +1010,7 @@ fn decode_export_section(decoder: &mut Decoder) -> Vec<Export> {
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#start-section
 fn decode_start_section(decoder: &mut Decoder) -> Option<StartFunction> {
-    if decoder.pick_byte().unwrap() == SECTION_ID_START {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_START) {
         decoder.eat_byte(); // section size
 
         Some(StartFunction {
@@ -1025,8 +1025,7 @@ fn decode_start_section(decoder: &mut Decoder) -> Option<StartFunction> {
 fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
     let mut elements = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_ELEMENT {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_ELEMENT) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -1057,8 +1056,7 @@ fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
 fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression)> {
     let mut codes = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_CODE {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_CODE) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -1090,8 +1088,7 @@ fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression
 fn decode_data_section(decoder: &mut Decoder) -> Vec<Data> {
     let mut datas = Vec::new();
 
-    if decoder.pick_byte().unwrap() == SECTION_ID_DATA {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(SECTION_ID_DATA) {
         decoder.eat_byte(); // section size
 
         let vector_size = decode_u32(decoder);
@@ -1138,8 +1135,6 @@ fn decode(bytes: Vec<u8>) -> Module {
             && decoder.eat_byte() == 0x00,
         "Invalid version number"
     );
-
-    println!("1");
 
     // TODO: Collect custom sections
     decode_custom_sections(&mut decoder);
