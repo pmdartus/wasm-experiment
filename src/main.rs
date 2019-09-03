@@ -400,11 +400,11 @@ fn decode_unsigned_leb_128(decoder: &mut Decoder) -> u64 {
     let mut shift: u32 = 0;
 
     loop {
-        let byte = decoder.eat_byte() as u64;
+        let byte = u64::from(decoder.eat_byte());
 
         // Extract the low order 7 bits of byte, left shift the byte and add them to the current
         // result.
-        result = result | ((byte & 0x7f) << (shift * 7));
+        result |= (byte & 0x7f) << (shift * 7);
 
         // Increase the shift by one.
         shift += 1;
@@ -921,8 +921,8 @@ fn decode_table_type(decoder: &mut Decoder) -> TableType {
     let limits = decode_limits(decoder);
 
     TableType {
-        element_type: element_type,
-        limits: limits,
+        element_type,
+        limits,
     }
 }
 
@@ -936,9 +936,7 @@ fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let table_type = decode_table_type(decoder);
-            tables.push(Table {
-                table_type: table_type,
-            });
+            tables.push(Table { table_type });
         }
     }
 
@@ -955,9 +953,8 @@ fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let limits = decode_limits(decoder);
-            memories.push(Memory {
-                memory_type: MemoryType { limits: limits },
-            });
+            let memory_type = MemoryType { limits };
+            memories.push(Memory { memory_type });
         }
     }
 
@@ -1042,9 +1039,9 @@ fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
             }
 
             elements.push(Element {
-                table: table,
-                offset: offset,
-                init: init,
+                table,
+                offset,
+                init,
             });
         }
     }
@@ -1103,11 +1100,7 @@ fn decode_data_section(decoder: &mut Decoder) -> Vec<Data> {
                 init.push(decoder.eat_byte())
             }
 
-            datas.push(Data {
-                data: data,
-                offset: offset,
-                init: init,
-            })
+            datas.push(Data { data, offset, init })
         }
     }
 
@@ -1117,7 +1110,7 @@ fn decode_data_section(decoder: &mut Decoder) -> Vec<Data> {
 /// https://webassembly.github.io/spec/core/binary/modules.html
 fn decode(bytes: Vec<u8>) -> Module {
     let mut decoder = Decoder {
-        bytes: bytes,
+        bytes,
         offset: 0,
     };
 
@@ -1184,15 +1177,15 @@ fn decode(bytes: Vec<u8>) -> Module {
     }
 
     Module {
-        function_types: function_types,
-        functions: functions,
-        tables: tables,
-        memories: memories,
-        globals: globals,
-        elements: elements,
-        data: data,
-        start: start,
-        imports: imports,
-        exports: exports,
+        function_types,
+        functions,
+        tables,
+        memories,
+        globals,
+        elements,
+        data,
+        start,
+        imports,
+        exports,
     }
 }
