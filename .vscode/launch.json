@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/weaselm",
+            "args": ["./tests/fixtures/add.wasm"],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
