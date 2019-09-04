@@ -10,9 +10,8 @@ fn main() -> io::Result<()> {
         _ => panic!("No file argument found"),
     };
 
-    // Error handling
     let file = fs::read(filename)?;
-    let module = decode(file);
+    let module = decode(&file[..]);
 
     println!("{:#?}", module);
 
@@ -88,6 +87,8 @@ enum Index {
     Local(u32),
     Label(u32),
 }
+
+type CustomSection<'a> = (String, &'a [u8]);
 
 #[derive(Debug)]
 struct Table {
@@ -350,7 +351,8 @@ enum Instruction {
 type Expression = Vec<Instruction>;
 
 #[derive(Debug)]
-struct Module {
+struct Module<'a> {
+    custom_sections: Vec<CustomSection<'a>>,
     function_types: Vec<FunctionType>,
     functions: Vec<Function>,
     tables: Vec<Table>,
@@ -363,12 +365,17 @@ struct Module {
     exports: Vec<Export>,
 }
 
-struct Decoder {
-    bytes: Vec<u8>,
+#[derive(Debug, Copy, Clone)]
+struct Decoder<'a> {
+    bytes: &'a [u8],
     offset: usize,
 }
 
-impl Decoder {
+impl<'a> Decoder<'a> {
+    fn new(bytes: &'a [u8]) -> Decoder {
+        Decoder { bytes, offset: 0 }
+    }
+
     fn eat_byte(&mut self) -> u8 {
         let ret = self.pick_byte().expect("Unexpected end of file");
 
@@ -822,20 +829,14 @@ fn decode_section<F>(decoder: &mut Decoder, section_id: u8, mut callback: F)
 where
     F: FnMut(&mut Decoder),
 {
-    if decoder.pick_byte().unwrap() == section_id {
-        decoder.eat_byte(); // section id
+    if decoder.match_byte(section_id) {
         let size = decode_u32(decoder);
-        let offset = decoder.offset + size as usize;
+        let end_offset = decoder.offset + size as usize;
 
-        // Find a better way to avoid having to clone the bytes for each decoder.
-        let mut closure_decoder = Decoder {
-            bytes: decoder.bytes.clone(),
-            offset: decoder.offset,
-        };
+        let closure_decoder = &mut decoder.clone();
+        callback(closure_decoder);
 
-        callback(&mut closure_decoder);
-
-        if closure_decoder.offset != offset {
+        if closure_decoder.offset != end_offset {
             panic!("Invalid section size");
         }
 
@@ -844,13 +845,16 @@ where
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#custom-section
-fn decode_custom_sections(decoder: &mut Decoder) {
+fn decode_custom_sections<'a>(decoder: &mut Decoder<'a>, custom_sections: &mut Vec<CustomSection<'a>>) {
     while decoder.match_byte(SECTION_ID_CUSTOM) {
-        let section_size = decode_u32(decoder);
-        for _i in 0..section_size {
-            decoder.eat_byte();
-        }
-    }
+        let size = decode_u32(decoder);
+        let end_offset = decoder.offset + size as usize;
+
+        let name = decode_name(decoder);
+        let bytes = &decoder.bytes[decoder.offset..end_offset];
+
+        custom_sections.push((name, bytes));
+    };
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#type-section
@@ -872,9 +876,7 @@ fn decode_function_type_section(decoder: &mut Decoder) -> Vec<FunctionType> {
 fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
     let mut imports = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_IMPORT) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_IMPORT, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             imports.push(Import {
@@ -889,7 +891,7 @@ fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
                 },
             })
         }
-    }
+    });
 
     imports
 }
@@ -898,15 +900,13 @@ fn decode_import_section(decoder: &mut Decoder) -> Vec<Import> {
 fn decode_function_section(decoder: &mut Decoder) -> Vec<Index> {
     let mut type_indexes = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_FUNCTION) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_FUNCTION, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let type_index = Index::Type(decode_u32(decoder));
             type_indexes.push(type_index);
         }
-    }
+    });
 
     type_indexes
 }
@@ -930,15 +930,13 @@ fn decode_table_type(decoder: &mut Decoder) -> TableType {
 fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
     let mut tables = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_TABLE) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_TABLE, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let table_type = decode_table_type(decoder);
             tables.push(Table { table_type });
         }
-    }
+    });
 
     tables
 }
@@ -947,16 +945,14 @@ fn decode_table_section(decoder: &mut Decoder) -> Vec<Table> {
 fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
     let mut memories = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_MEMORY) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_MEMORY, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let limits = decode_limits(decoder);
             let memory_type = MemoryType { limits };
             memories.push(Memory { memory_type });
         }
-    }
+    });
 
     memories
 }
@@ -965,9 +961,7 @@ fn decode_memory_section(decoder: &mut Decoder) -> Vec<Memory> {
 fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
     let mut globals = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_GLOBAL) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_GLOBAL, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             globals.push(Global {
@@ -975,7 +969,7 @@ fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
                 init: decode_expression(decoder),
             });
         }
-    }
+    });
 
     globals
 }
@@ -984,9 +978,7 @@ fn decode_global_section(decoder: &mut Decoder) -> Vec<Global> {
 fn decode_export_section(decoder: &mut Decoder) -> Vec<Export> {
     let mut exports = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_EXPORT) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_EXPORT, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             exports.push(Export {
@@ -1000,7 +992,7 @@ fn decode_export_section(decoder: &mut Decoder) -> Vec<Export> {
                 },
             })
         }
-    }
+    });
 
     exports
 }
@@ -1022,9 +1014,7 @@ fn decode_start_section(decoder: &mut Decoder) -> Option<StartFunction> {
 fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
     let mut elements = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_ELEMENT) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_ELEMENT, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let table = Index::Table(decode_u32(decoder));
@@ -1044,7 +1034,7 @@ fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
                 init,
             });
         }
-    }
+    });
 
     elements
 }
@@ -1053,9 +1043,7 @@ fn decode_element_section(decoder: &mut Decoder) -> Vec<Element> {
 fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression)> {
     let mut codes = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_CODE) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_CODE, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             decoder.eat_byte(); // code size
@@ -1076,7 +1064,7 @@ fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression
 
             codes.push((locals, expression))
         }
-    }
+    });
 
     codes
 }
@@ -1085,9 +1073,7 @@ fn decode_code_section(decoder: &mut Decoder) -> Vec<(Vec<ValueType>, Expression
 fn decode_data_section(decoder: &mut Decoder) -> Vec<Data> {
     let mut datas = Vec::new();
 
-    if decoder.match_byte(SECTION_ID_DATA) {
-        decoder.eat_byte(); // section size
-
+    decode_section(decoder, SECTION_ID_DATA, |decoder| {
         let vector_size = decode_u32(decoder);
         for _ in 0..vector_size {
             let data = Index::Memory(decode_u32(decoder));
@@ -1102,17 +1088,15 @@ fn decode_data_section(decoder: &mut Decoder) -> Vec<Data> {
 
             datas.push(Data { data, offset, init })
         }
-    }
+    });
 
     datas
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html
-fn decode(bytes: Vec<u8>) -> Module {
-    let mut decoder = Decoder {
-        bytes,
-        offset: 0,
-    };
+fn decode(bytes: &[u8]) -> Module {
+    let decoder = &mut Decoder::new(bytes);
+    let mut custom_sections = Vec::new();
 
     assert!(
         decoder.eat_byte() == 0x00
@@ -1129,30 +1113,29 @@ fn decode(bytes: Vec<u8>) -> Module {
         "Invalid version number"
     );
 
-    // TODO: Collect custom sections
-    decode_custom_sections(&mut decoder);
-    let function_types = decode_function_type_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let imports = decode_import_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let function_type_indexes = decode_function_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let tables = decode_table_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let memories = decode_memory_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let globals = decode_global_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let exports = decode_export_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let start = decode_start_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let elements = decode_element_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let codes = decode_code_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
-    let data = decode_data_section(&mut decoder);
-    decode_custom_sections(&mut decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let function_types = decode_function_type_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let imports = decode_import_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let function_type_indexes = decode_function_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let tables = decode_table_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let memories = decode_memory_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let globals = decode_global_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let exports = decode_export_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let start = decode_start_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let elements = decode_element_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let codes = decode_code_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
+    let data = decode_data_section(decoder);
+    decode_custom_sections(decoder, &mut custom_sections);
 
     if decoder.offset != decoder.bytes.len() {
         panic!("Unexpected end of file");
@@ -1177,6 +1160,7 @@ fn decode(bytes: Vec<u8>) -> Module {
     }
 
     Module {
+        custom_sections,
         function_types,
         functions,
         tables,
