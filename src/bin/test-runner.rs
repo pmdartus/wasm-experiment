@@ -162,12 +162,15 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
         match command {
             manifest::Command::Module { line: _, filename } => {
                 let module_path = test_dir.join(filename);
-                println!("{:}", module_path.to_str().unwrap());
+                let module_path_string  = module_path.to_str().unwrap();
 
-                let file = fs::read(module_path).unwrap();
+                let file = fs::read(module_path_string).unwrap();
                 let res = decoder::decode(&file[..]);
 
-                println!("{:?}", res);
+                match res {
+                    Err(err) => println!("❌ FAILED: {:?} {}", module_path_string, err),
+                    _ => println!("✔️ PASS {:?}", module_path_string),
+                }
             }
             _ => (),
         }
