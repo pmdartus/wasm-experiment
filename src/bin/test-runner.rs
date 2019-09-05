@@ -72,7 +72,7 @@ mod manifest {
         },
 
         #[serde(rename = "assert_return")]
-        AssertReturn { 
+        AssertReturn {
             line: u32,
             action: Action,
             expected: Vec<Value>,
@@ -108,16 +108,13 @@ mod manifest {
     #[serde(tag = "type")]
     pub enum Action {
         #[serde(rename = "invoke")]
-        Invoke {
-            field: String,
-            args: Vec<Value>
-        },
+        Invoke { field: String, args: Vec<Value> },
 
         #[serde(rename = "get")]
         Get {
             field: String,
             module: Option<String>,
-        }
+        },
     }
 
     #[derive(Deserialize, Debug)]
@@ -126,11 +123,11 @@ mod manifest {
         #[serde(rename = "i32")]
         I32 { value: Option<String> },
         #[serde(rename = "i64")]
-        I64  { value: Option<String> },
+        I64 { value: Option<String> },
         #[serde(rename = "f32")]
         F32 { value: Option<String> },
         #[serde(rename = "f64")]
-        F64 { value: Option<String> }
+        F64 { value: Option<String> },
     }
 }
 
@@ -154,7 +151,11 @@ fn main() {
 }
 
 fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
-    let filename = Path::new(&manifest.source_filename).file_name().unwrap().to_str().unwrap();
+    let filename = Path::new(&manifest.source_filename)
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap();
     println!("Running test for: {:}", filename);
 
     for command in manifest.commands {
@@ -164,8 +165,10 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
                 println!("{:}", module_path.to_str().unwrap());
 
                 let file = fs::read(module_path).unwrap();
-                decoder::decode(&file[..]);
-            },
+                let res = decoder::decode(&file[..]);
+
+                println!("{:?}", res);
+            }
             _ => (),
         }
     }
