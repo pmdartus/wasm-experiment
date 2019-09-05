@@ -24,22 +24,6 @@ struct Decoder<'a> {
     offset: usize,
 }
 
-#[derive(Debug)]
-pub struct DecoderError {
-    offset: usize,
-    message: String,
-}
-
-impl fmt::Display for DecoderError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "DecoderError: {} (offset: {})",
-            self.message, self.offset
-        )
-    }
-}
-
 impl<'a> Decoder<'a> {
     fn new(bytes: &'a [u8]) -> Decoder {
         Decoder { bytes, offset: 0 }
@@ -77,6 +61,24 @@ impl<'a> Decoder<'a> {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct DecoderError {
+    offset: usize,
+    message: String,
+}
+
+impl fmt::Display for DecoderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "DecoderError: {} (offset: {})",
+            self.message, self.offset
+        )
+    }
+}
+
+type DecoderResult<T> = Result<T, DecoderError>;
 
 fn decode_unsigned_leb_128(decoder: &mut Decoder) -> u64 {
     let mut result: u64 = 0;
@@ -131,7 +133,7 @@ fn decode_f64(_decoder: &mut Decoder) -> f64 {
 ///
 /// The higher bits in the first byte contains a mask describing the number of byte encoding the
 /// character. In UTF-8 characters can be encoded over 1 to 4 bytes.
-fn decode_name(decoder: &mut Decoder) -> Result<String, DecoderError> {
+fn decode_name(decoder: &mut Decoder) -> DecoderResult<String> {
     let mut chars = Vec::new();
 
     let vector_size = decode_u32(decoder);
@@ -180,7 +182,7 @@ fn decode_name(decoder: &mut Decoder) -> Result<String, DecoderError> {
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#limits
-fn decode_limits(decoder: &mut Decoder) -> Result<Limits, DecoderError> {
+fn decode_limits(decoder: &mut Decoder) -> DecoderResult<Limits> {
     match decoder.eat_byte() {
         0x00 => Ok(Limits {
             min: decode_u32(decoder),
@@ -195,7 +197,7 @@ fn decode_limits(decoder: &mut Decoder) -> Result<Limits, DecoderError> {
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#value-types
-fn decode_value_type(decoder: &mut Decoder) -> Result<ValueType, DecoderError> {
+fn decode_value_type(decoder: &mut Decoder) -> DecoderResult<ValueType> {
     match decoder.eat_byte() {
         0x7F => Ok(ValueType::I32),
         0x7E => Ok(ValueType::I64),
@@ -206,7 +208,7 @@ fn decode_value_type(decoder: &mut Decoder) -> Result<ValueType, DecoderError> {
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-functype
-fn decode_function_type(decoder: &mut Decoder) -> Result<FunctionType, DecoderError> {
+fn decode_function_type(decoder: &mut Decoder) -> DecoderResult<FunctionType> {
     if decoder.eat_byte() != 0x60 {
         return Err(decoder.produce_error("Invalid function type prefix"));
     }
@@ -230,7 +232,7 @@ fn decode_function_type(decoder: &mut Decoder) -> Result<FunctionType, DecoderEr
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-globaltype
-fn decode_global_type(decoder: &mut Decoder) -> Result<GlobalType, DecoderError> {
+fn decode_global_type(decoder: &mut Decoder) -> DecoderResult<GlobalType> {
     Ok(GlobalType {
         value_type: decode_value_type(decoder)?,
         mutability: match decoder.eat_byte() {
@@ -244,7 +246,7 @@ fn decode_global_type(decoder: &mut Decoder) -> Result<GlobalType, DecoderError>
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-blocktype
-fn decode_block_type(decoder: &mut Decoder) -> Result<BlockType, DecoderError> {
+fn decode_block_type(decoder: &mut Decoder) -> DecoderResult<BlockType> {
     match decoder.eat_byte() {
         0x40 => Ok(BlockType::Void),
         _ => Ok(BlockType::Return(decode_value_type(decoder)?)),
@@ -260,7 +262,7 @@ fn decode_memory_arg(decoder: &mut Decoder) -> MemoryArg {
 }
 
 /// https://webassembly.github.io/spec/core/binary/instructions.html#instructions
-fn decode_instruction(decoder: &mut Decoder) -> Result<Instruction, DecoderError> {
+fn decode_instruction(decoder: &mut Decoder) -> DecoderResult<Instruction> {
     Ok(match decoder.eat_byte() {
         0x00 => Instruction::Unreachable,
         0x01 => Instruction::Nop,
@@ -499,7 +501,7 @@ fn decode_instruction(decoder: &mut Decoder) -> Result<Instruction, DecoderError
 }
 
 /// https://webassembly.github.io/spec/core/binary/instructions.html#binary-expr
-fn decode_expression(decoder: &mut Decoder) -> Result<Expression, DecoderError> {
+fn decode_expression(decoder: &mut Decoder) -> DecoderResult<Expression> {
     let mut instructions = Vec::new();
 
     while decoder.pick_byte().unwrap() != 0x0B {
@@ -540,7 +542,7 @@ where
 fn decode_custom_sections<'a>(
     decoder: &mut Decoder<'a>,
     custom_sections: &mut Vec<CustomSection<'a>>,
-) -> Result<(), DecoderError> {
+) -> DecoderResult<()> {
     while decoder.match_byte(SECTION_ID_CUSTOM) {
         let size = decode_u32(decoder);
         let end_offset = decoder.offset + size as usize;
@@ -555,7 +557,7 @@ fn decode_custom_sections<'a>(
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#type-section
-fn decode_function_type_section(decoder: &mut Decoder) -> Result<Vec<FunctionType>, DecoderError> {
+fn decode_function_type_section(decoder: &mut Decoder) -> DecoderResult<Vec<FunctionType>> {
     let mut function_types = Vec::new();
 
     decode_section(decoder, SECTION_ID_TYPE, |decoder| {
@@ -571,7 +573,7 @@ fn decode_function_type_section(decoder: &mut Decoder) -> Result<Vec<FunctionTyp
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-importsec
-fn decode_import_section(decoder: &mut Decoder) -> Result<Vec<Import>, DecoderError> {
+fn decode_import_section(decoder: &mut Decoder) -> DecoderResult<Vec<Import>> {
     let mut imports = Vec::new();
 
     decode_section(decoder, SECTION_ID_IMPORT, |decoder| {
@@ -596,7 +598,7 @@ fn decode_import_section(decoder: &mut Decoder) -> Result<Vec<Import>, DecoderEr
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-funcsec
-fn decode_function_section(decoder: &mut Decoder) -> Result<Vec<Index>, DecoderError> {
+fn decode_function_section(decoder: &mut Decoder) -> DecoderResult<Vec<Index>> {
     let mut type_indexes = Vec::new();
 
     decode_section(decoder, SECTION_ID_FUNCTION, |decoder| {
@@ -612,7 +614,7 @@ fn decode_function_section(decoder: &mut Decoder) -> Result<Vec<Index>, DecoderE
 }
 
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-tabletype
-fn decode_table_type(decoder: &mut Decoder) -> Result<TableType, DecoderError> {
+fn decode_table_type(decoder: &mut Decoder) -> DecoderResult<TableType> {
     let element_type = match decoder.eat_byte() {
         0x70 => ElementType::FuncRef,
         _ => return Err(decoder.produce_error("Invalid element type")),
@@ -627,7 +629,7 @@ fn decode_table_type(decoder: &mut Decoder) -> Result<TableType, DecoderError> {
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-tablesec
-fn decode_table_section(decoder: &mut Decoder) -> Result<Vec<Table>, DecoderError> {
+fn decode_table_section(decoder: &mut Decoder) -> DecoderResult<Vec<Table>> {
     let mut tables = Vec::new();
 
     decode_section(decoder, SECTION_ID_TABLE, |decoder| {
@@ -643,7 +645,7 @@ fn decode_table_section(decoder: &mut Decoder) -> Result<Vec<Table>, DecoderErro
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-memsec
-fn decode_memory_section(decoder: &mut Decoder) -> Result<Vec<Memory>, DecoderError> {
+fn decode_memory_section(decoder: &mut Decoder) -> DecoderResult<Vec<Memory>> {
     let mut memories = Vec::new();
 
     decode_section(decoder, SECTION_ID_MEMORY, |decoder| {
@@ -660,7 +662,7 @@ fn decode_memory_section(decoder: &mut Decoder) -> Result<Vec<Memory>, DecoderEr
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-globalsec
-fn decode_global_section(decoder: &mut Decoder) -> Result<Vec<Global>, DecoderError> {
+fn decode_global_section(decoder: &mut Decoder) -> DecoderResult<Vec<Global>> {
     let mut globals = Vec::new();
 
     decode_section(decoder, SECTION_ID_GLOBAL, |decoder| {
@@ -678,7 +680,7 @@ fn decode_global_section(decoder: &mut Decoder) -> Result<Vec<Global>, DecoderEr
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-exportsec
-fn decode_export_section(decoder: &mut Decoder) -> Result<Vec<Export>, DecoderError> {
+fn decode_export_section(decoder: &mut Decoder) -> DecoderResult<Vec<Export>> {
     let mut exports = Vec::new();
 
     decode_section(decoder, SECTION_ID_EXPORT, |decoder| {
@@ -702,7 +704,7 @@ fn decode_export_section(decoder: &mut Decoder) -> Result<Vec<Export>, DecoderEr
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#start-section
-fn decode_start_section(decoder: &mut Decoder) -> Result<Option<StartFunction>, DecoderError> {
+fn decode_start_section(decoder: &mut Decoder) -> DecoderResult<Option<StartFunction>> {
     if decoder.match_byte(SECTION_ID_START) {
         decoder.eat_byte(); // section size
 
@@ -715,7 +717,7 @@ fn decode_start_section(decoder: &mut Decoder) -> Result<Option<StartFunction>, 
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#element-section
-fn decode_element_section(decoder: &mut Decoder) -> Result<Vec<Element>, DecoderError> {
+fn decode_element_section(decoder: &mut Decoder) -> DecoderResult<Vec<Element>> {
     let mut elements = Vec::new();
 
     decode_section(decoder, SECTION_ID_ELEMENT, |decoder| {
@@ -747,7 +749,7 @@ fn decode_element_section(decoder: &mut Decoder) -> Result<Vec<Element>, Decoder
 /// https://webassembly.github.io/spec/core/binary/modules.html#code-section
 fn decode_code_section(
     decoder: &mut Decoder,
-) -> Result<Vec<(Vec<ValueType>, Expression)>, DecoderError> {
+) -> DecoderResult<Vec<(Vec<ValueType>, Expression)>> {
     let mut codes = Vec::new();
 
     decode_section(decoder, SECTION_ID_CODE, |decoder| {
@@ -778,7 +780,7 @@ fn decode_code_section(
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#data-section
-fn decode_data_section(decoder: &mut Decoder) -> Result<Vec<Data>, DecoderError> {
+fn decode_data_section(decoder: &mut Decoder) -> DecoderResult<Vec<Data>> {
     let mut datas = Vec::new();
 
     decode_section(decoder, SECTION_ID_DATA, |decoder| {
@@ -803,7 +805,7 @@ fn decode_data_section(decoder: &mut Decoder) -> Result<Vec<Data>, DecoderError>
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html
-pub fn decode(bytes: &[u8]) -> Result<Module, DecoderError> {
+pub fn decode(bytes: &[u8]) -> DecoderResult<Module> {
     let decoder = &mut Decoder::new(bytes);
     let mut custom_sections = Vec::new();
 
