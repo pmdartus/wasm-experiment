@@ -2,8 +2,7 @@ use std::env;
 use std::fs;
 use std::io;
 
-mod types;
-mod decoder;
+use weaselm::decoder;
 
 // TODO: Understand how this io package work!
 fn main() -> io::Result<()> {
