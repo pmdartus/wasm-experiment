@@ -135,11 +135,28 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let dir = args.get(1).expect("No test directory found");
 
+    let filter = if args.len() > 2 {
+        Some(args.get(2).unwrap())
+    } else {
+        None
+    };
+
     let test_dir = Path::new(dir);
     let manifest_files: Vec<_> = fs::read_dir(test_dir)
         .unwrap()
         .map(|f| f.unwrap().path())
-        .filter(|f| f.extension().unwrap() == "json")
+        .filter(|f| {
+            if f.extension().unwrap() != "json" {
+                return false
+            }
+
+            println!("{:}", f.file_name().unwrap().to_str().unwrap());
+
+            match filter {
+                Some(filename) => f.file_name().unwrap().to_str().unwrap() == filename,
+                None => true,
+            }
+        })
         .collect();
 
     for manifest_file in manifest_files {
@@ -170,6 +187,18 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
                 match res {
                     Err(err) => println!("❌ FAILED: {:?} {}", module_path_string, err),
                     _ => println!("✔️ PASS {:?}", module_path_string),
+                }
+            }
+            manifest::Command::AssertMalformed { line: _, filename, text } => {
+                let module_path = test_dir.join(filename);
+                let module_path_string  = module_path.to_str().unwrap();
+
+                let file = fs::read(module_path_string).unwrap();
+                let res = decoder::decode(&file[..]);
+
+                match res {
+                    Err(_err) => println!("✔️ PASS {:?}", module_path_string),
+                    _ => println!("❌ FAILED: {:?} {}", module_path_string, text),
                 }
             }
             _ => (),
