@@ -329,7 +329,14 @@ pub struct Export {
 pub struct Import {
     pub module: String,
     pub name: String,
-    pub descriptor: Index,
+    pub descriptor: ImportDescriptor,
+}
+#[derive(Debug)]
+pub enum ImportDescriptor {
+    Function(u32),
+    Table(TableType),
+    Memory(MemoryType),
+    Global(GlobalType)
 }
 
 pub type CustomSection<'a> = (String, &'a [u8]);

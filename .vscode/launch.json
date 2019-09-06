@@ -2,12 +2,27 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Launch",
+            "name": "weasml",
             "type": "lldb",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/weaselm",
-            "args": ["./tests/fixtures/add.wasm"],
+            "args": ["${input:file}"],
             "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "test-runner",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/test-runner",
+            "args": ["./tests/fixtures", "${input:file}"],
+            "cwd": "${workspaceFolder}"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "file",
+            "type": "promptString",
+            "description": "File path run",
         }
     ]
 }

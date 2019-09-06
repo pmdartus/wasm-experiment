@@ -2,8 +2,9 @@ use std::{f32, f64, fmt};
 
 use super::types::{
     BlockType, CustomSection, Data, Element, ElementType, Export, Expression, Function,
-    FunctionType, Global, GlobalType, GlobalTypeMutability, Import, Index, Instruction, Limits,
-    Memory, MemoryArg, MemoryType, Module, StartFunction, Table, TableType, ValueType,
+    FunctionType, Global, GlobalType, GlobalTypeMutability, Import, ImportDescriptor, Index,
+    Instruction, Limits, Memory, MemoryArg, MemoryType, Module, StartFunction, Table, TableType,
+    ValueType,
 };
 
 const SECTION_ID_CUSTOM: u8 = 0;
@@ -242,6 +243,12 @@ fn decode_function_type(decoder: &mut Decoder) -> DecoderResult<FunctionType> {
     Ok((params, results))
 }
 
+fn decode_memory_type(decoder: &mut Decoder) -> DecoderResult<MemoryType> {
+    Ok(MemoryType {
+        limits: decode_limits(decoder)?,
+    })
+}
+
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-globaltype
 fn decode_global_type(decoder: &mut Decoder) -> DecoderResult<GlobalType> {
     Ok(GlobalType {
@@ -258,10 +265,13 @@ fn decode_global_type(decoder: &mut Decoder) -> DecoderResult<GlobalType> {
 
 /// https://webassembly.github.io/spec/core/binary/types.html#binary-blocktype
 fn decode_block_type(decoder: &mut Decoder) -> DecoderResult<BlockType> {
-    match decoder.eat_byte()? {
-        0x40 => Ok(BlockType::Void),
-        _ => Ok(BlockType::Return(decode_value_type(decoder)?)),
-    }
+    Ok(
+        if decoder.match_byte(0x40) {
+            BlockType::Void
+        } else {
+            BlockType::Return(decode_value_type(decoder)?)
+        }
+    )
 }
 
 /// https://webassembly.github.io/spec/core/binary/instructions.html#binary-memarg
@@ -307,7 +317,7 @@ fn decode_instruction(decoder: &mut Decoder) -> DecoderResult<Instruction> {
                 if_instructions.push(decode_instruction(decoder)?);
             }
 
-            let else_instructions = if decoder.pick_byte().unwrap() == 0x05 {
+            let else_instructions = if decoder.match_byte(0x05) {
                 let mut else_instructions = Vec::new();
 
                 while decoder.pick_byte().unwrap() != 0x0B {
@@ -619,10 +629,10 @@ fn decode_import_section(decoder: &mut Decoder) -> DecoderResult<Vec<Import>> {
                 module: decode_name(decoder)?,
                 name: decode_name(decoder)?,
                 descriptor: match decoder.eat_byte()? {
-                    0x00 => Index::Type(decode_u32(decoder)?),
-                    0x01 => Index::Table(decode_u32(decoder)?),
-                    0x02 => Index::Memory(decode_u32(decoder)?),
-                    0x03 => Index::Global(decode_u32(decoder)?),
+                    0x00 => ImportDescriptor::Function(decode_u32(decoder)?),
+                    0x01 => ImportDescriptor::Table(decode_table_type(decoder)?),
+                    0x02 => ImportDescriptor::Memory(decode_memory_type(decoder)?),
+                    0x03 => ImportDescriptor::Global(decode_global_type(decoder)?),
                     _ => return Err(decoder.produce_error("Invalid import descriptor")),
                 },
             })
@@ -687,9 +697,9 @@ fn decode_memory_section(decoder: &mut Decoder) -> DecoderResult<Vec<Memory>> {
     decode_section(decoder, SECTION_ID_MEMORY, |decoder| {
         let vector_size = decode_u32(decoder)?;
         for _ in 0..vector_size {
-            let limits = decode_limits(decoder)?;
-            let memory_type = MemoryType { limits };
-            memories.push(Memory { memory_type });
+            memories.push(Memory {
+                memory_type: decode_memory_type(decoder)?,
+            });
         }
         Ok(())
     })?;
@@ -791,7 +801,8 @@ fn decode_code_section(
     decode_section(decoder, SECTION_ID_CODE, |decoder| {
         let vector_size = decode_u32(decoder)?;
         for _ in 0..vector_size {
-            decoder.eat_byte()?; // code size
+            let code_size = decode_u32(decoder)?;
+            let end_offset = decoder.offset + code_size as usize;
 
             let mut locals = Vec::new();
             let mut total_local_count: u64 = 0;
@@ -813,6 +824,10 @@ fn decode_code_section(
             }
 
             let expression = decode_expression(decoder)?;
+
+            if decoder.offset != end_offset {
+                return Err(decoder.produce_error("Invalid code size"));
+            }
 
             codes.push((locals, expression))
         }
