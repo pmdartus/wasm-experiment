@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 
+use colored::*;
 use serde_json;
 
 use weaselm::decoder;
@@ -131,6 +132,20 @@ mod manifest {
     }
 }
 
+#[derive(Debug)]
+struct TestResult {
+    test_name: String,
+    file_name: String,
+    line: u32,
+    state: TestState,
+}
+
+#[derive(Debug)]
+enum TestState {
+    Pass,
+    Fail { message: String },
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let dir = args.get(1).expect("No test directory found");
@@ -147,7 +162,7 @@ fn main() {
         .map(|f| f.unwrap().path())
         .filter(|f| {
             if f.extension().unwrap() != "json" {
-                return false
+                return false;
             }
 
             match filter {
@@ -161,48 +176,83 @@ fn main() {
         let reader = BufReader::new(File::open(manifest_file).unwrap());
         let manifest: manifest::Manifest = serde_json::from_reader(reader).unwrap();
 
-        run_manifest(&test_dir, manifest);
+        println!("{}", manifest.source_filename.bold());
+
+        let results = run_manifest(&test_dir, manifest);
+
+        for result in results {
+            match result.state {
+                TestState::Pass => {
+                    println!("  {}", result.test_name.bright_green());
+                }
+                TestState::Fail { message } => {
+                    println!("  {}", result.test_name.red());
+                    println!("    {}", message.bright_black());
+                }
+            }
+        }
+
+        println!("")
     }
 }
 
-fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
-    let filename = Path::new(&manifest.source_filename)
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap();
-    println!("Running test for: {:}", filename);
+fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) -> Vec<TestResult> {
+    let mut command_index = 0;
 
-    for command in manifest.commands {
-        match command {
-            manifest::Command::Module { line, filename } => {
-                let module_path = test_dir.join(filename);
-                let module_path_string  = module_path.to_str().unwrap();
+    manifest
+        .commands
+        .iter()
+        .map(move |command| {
+            command_index += 1;
 
-                let file = fs::read(module_path_string).unwrap();
-                let res = decoder::decode(&file[..]);
+            match command {
+                manifest::Command::Module { line, filename } => {
+                    let test_name = format!("#{} Instantiate module", command_index);
 
-                match res {
-                    Err(err) => println!("❌ FAILED: {:?} (line: {:}) {}", module_path_string, line, err),
-                    _ => println!("✅ PASS {:?}", module_path_string),
+                    let module_path = test_dir.join(filename);
+                    let module_path_string = module_path.to_str().unwrap();
+
+                    let file = fs::read(module_path_string).unwrap();
+                    let res = decoder::decode(&file[..]);
+
+                    match res {
+                        Err(err) => Some(TestResult {
+                            test_name,
+                            line: *line,
+                            file_name: String::from(filename),
+                            state: TestState::Fail {
+                                message: format!(
+                                    "{} (offset: {}, file: {})",
+                                    err.message, err.offset, module_path_string
+                                ),
+                            },
+                        }),
+                        _ => Some(TestResult {
+                            test_name,
+                            line: *line,
+                            file_name: String::from(filename),
+                            state: TestState::Pass,
+                        }),
+                    }
                 }
-            }
-            manifest::Command::AssertMalformed { line, filename, text } => {
-                let module_path = test_dir.join(filename);
-                let module_path_string  = module_path.to_str().unwrap();
+                // manifest::Command::AssertMalformed { line, filename, text } => {
+                //     let module_path = test_dir.join(filename);
+                //     let module_path_string  = module_path.to_str().unwrap();
 
-                let file = fs::read(module_path_string).unwrap();
-                let res = decoder::decode(&file[..]);
+                //     let file = fs::read(module_path_string).unwrap();
+                //     let res = decoder::decode(&file[..]);
 
-                match res {
-                    Err(_err) => println!("✅ PASS {:?}", module_path_string),
-                    Ok(_module) => {
-                        // println!("{:#?}", _module);
-                        println!("❌ FAILED: {:?} (line: {:}) {}", module_path_string, line, text)
-                    },
-                }
+                //     match res {
+                //         Err(_err) => println!("✅ PASS {:?}", module_path_string),
+                //         Ok(_module) => {
+                //             // println!("{:#?}", _module);
+                //             println!("❌ FAILED: {:?} (line: {:}) {}", module_path_string, line, text)
+                //         },
+                //     }
+                // }
+                _ => None,
             }
-            _ => (),
-        }
-    }
+        })
+        .filter_map(|result| result)
+        .collect()
 }

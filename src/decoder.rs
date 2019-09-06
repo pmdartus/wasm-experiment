@@ -68,8 +68,8 @@ impl<'a> Decoder<'a> {
 
 #[derive(Debug)]
 pub struct DecoderError {
-    offset: usize,
-    message: String,
+    pub offset: usize,
+    pub message: String,
 }
 
 impl fmt::Display for DecoderError {
