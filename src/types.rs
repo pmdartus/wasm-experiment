@@ -272,7 +272,7 @@ pub enum Index {
 #[derive(Debug)]
 pub struct Function {
     pub function_type: Index,
-    pub locals: Vec<ValueType>,
+    pub locals: Vec<(u32, ValueType)>,
     pub body: Expression,
 }
 

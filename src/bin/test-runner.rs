@@ -150,8 +150,6 @@ fn main() {
                 return false
             }
 
-            println!("{:}", f.file_name().unwrap().to_str().unwrap());
-
             match filter {
                 Some(filename) => f.file_name().unwrap().to_str().unwrap() == filename,
                 None => true,
@@ -177,7 +175,7 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
 
     for command in manifest.commands {
         match command {
-            manifest::Command::Module { line: _, filename } => {
+            manifest::Command::Module { line, filename } => {
                 let module_path = test_dir.join(filename);
                 let module_path_string  = module_path.to_str().unwrap();
 
@@ -185,11 +183,11 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
                 let res = decoder::decode(&file[..]);
 
                 match res {
-                    Err(err) => println!("❌ FAILED: {:?} {}", module_path_string, err),
-                    _ => println!("✔️ PASS {:?}", module_path_string),
+                    Err(err) => println!("❌ FAILED: {:?} (line: {:}) {}", module_path_string, line, err),
+                    _ => println!("✅ PASS {:?}", module_path_string),
                 }
             }
-            manifest::Command::AssertMalformed { line: _, filename, text } => {
+            manifest::Command::AssertMalformed { line, filename, text } => {
                 let module_path = test_dir.join(filename);
                 let module_path_string  = module_path.to_str().unwrap();
 
@@ -197,8 +195,11 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) {
                 let res = decoder::decode(&file[..]);
 
                 match res {
-                    Err(_err) => println!("✔️ PASS {:?}", module_path_string),
-                    _ => println!("❌ FAILED: {:?} {}", module_path_string, text),
+                    Err(_err) => println!("✅ PASS {:?}", module_path_string),
+                    Ok(_module) => {
+                        // println!("{:#?}", _module);
+                        println!("❌ FAILED: {:?} (line: {:}) {}", module_path_string, line, text)
+                    },
                 }
             }
             _ => (),
