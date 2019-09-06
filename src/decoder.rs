@@ -1,9 +1,10 @@
+use std::{f32, f64, fmt};
+
 use super::types::{
     BlockType, CustomSection, Data, Element, ElementType, Export, Expression, Function,
     FunctionType, Global, GlobalType, GlobalTypeMutability, Import, Index, Instruction, Limits,
     Memory, MemoryArg, MemoryType, Module, StartFunction, Table, TableType, ValueType,
 };
-use std::fmt;
 
 const SECTION_ID_CUSTOM: u8 = 0;
 const SECTION_ID_TYPE: u8 = 1;
@@ -113,23 +114,31 @@ fn decode_u32(decoder: &mut Decoder) -> DecoderResult<u32> {
 }
 
 fn decode_i32(decoder: &mut Decoder) -> DecoderResult<i32> {
-    // TODO: Fix me
     Ok(decode_unsigned_leb_128(decoder)? as i32)
 }
 
 fn decode_i64(decoder: &mut Decoder) -> DecoderResult<i64> {
-    // TODO: Fix me
     Ok(decode_unsigned_leb_128(decoder)? as i64)
 }
 
-fn decode_f32(_decoder: &mut Decoder) -> DecoderResult<f32> {
-    // TODO: Fix me
-    Ok(0.0)
+fn decode_f32(decoder: &mut Decoder) -> DecoderResult<f32> {
+    let mut bits: u32 = 0;
+
+    for _ in 0..4 {
+        bits = (bits << 8) | decoder.eat_byte()? as u32;
+    }
+
+    Ok(f32::from_bits(bits))
 }
 
-fn decode_f64(_decoder: &mut Decoder) -> DecoderResult<f64> {
-    // TODO: Fix me
-    Ok(0.0)
+fn decode_f64(decoder: &mut Decoder) -> DecoderResult<f64> {
+    let mut bits: u64 = 0;
+
+    for _ in 0..8 {
+        bits = (bits << 8) | decoder.eat_byte()? as u64;
+    }
+
+    Ok(f64::from_bits(bits))
 }
 
 /// https://webassembly.github.io/spec/core/binary/values.html#binary-name
@@ -177,7 +186,6 @@ fn decode_name(decoder: &mut Decoder) -> DecoderResult<String> {
         }
     }
 
-    // TODO: Find a better way to do this.
     match String::from_utf8(chars) {
         Ok(s) => Ok(s),
         Err(_) => Err(decoder.produce_error("Invalid utf-encoding")),
@@ -381,7 +389,7 @@ fn decode_instruction(decoder: &mut Decoder) -> DecoderResult<Instruction> {
             }
 
             Instruction::MemorySize
-        },
+        }
         0x40 => {
             if !decoder.match_byte(0x00) {
                 return Err(
@@ -390,7 +398,7 @@ fn decode_instruction(decoder: &mut Decoder) -> DecoderResult<Instruction> {
             }
 
             Instruction::MemoryGrow
-        },
+        }
 
         0x41 => Instruction::I32Const(decode_i32(decoder)?),
         0x42 => Instruction::I64Const(decode_i64(decoder)?),
@@ -775,7 +783,9 @@ fn decode_element_section(decoder: &mut Decoder) -> DecoderResult<Vec<Element>> 
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#code-section
-fn decode_code_section(decoder: &mut Decoder) -> DecoderResult<Vec<(Vec<(u32, ValueType)>, Expression)>> {
+fn decode_code_section(
+    decoder: &mut Decoder,
+) -> DecoderResult<Vec<(Vec<(u32, ValueType)>, Expression)>> {
     let mut codes = Vec::new();
 
     decode_section(decoder, SECTION_ID_CODE, |decoder| {
@@ -799,7 +809,7 @@ fn decode_code_section(decoder: &mut Decoder) -> DecoderResult<Vec<(Vec<(u32, Va
 
             let base: u64 = 2;
             if total_local_count > base.pow(32) {
-                return Err(decoder.produce_error("Too many locals"))
+                return Err(decoder.produce_error("Too many locals"));
             }
 
             let expression = decode_expression(decoder)?;
