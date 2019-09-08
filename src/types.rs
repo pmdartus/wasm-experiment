@@ -1,7 +1,7 @@
 // TODO: Understand why Copy and Clone are always applied at the same time.
 // More details: https://doc.rust-lang.org/std/marker/trait.Copy.html
 /// https://webassembly.github.io/spec/core/syntax/types.html#value-types
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ValueType {
     I32,
     I64,
@@ -38,7 +38,7 @@ pub struct TableType {
 }
 
 /// https://webassembly.github.io/spec/core/syntax/types.html#global-types
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum GlobalTypeMutability {
     Const,
     Var,
@@ -73,23 +73,23 @@ pub enum Instruction {
     Block(BlockType, Vec<Instruction>),
     Loop(BlockType, Vec<Instruction>),
     If(BlockType, Vec<Instruction>, Option<Vec<Instruction>>),
-    Br(Index),
-    BrIf(Index),
-    BrTable(Vec<Index>, Index),
+    Br(u32),
+    BrIf(u32),
+    BrTable(Vec<u32>, u32),
     Return,
-    Call(Index),
-    CallIndirect(Index),
+    Call(u32),
+    CallIndirect(u32),
 
     // Parametric instructions
     Drop,
     Select,
 
     // Variable instructions
-    LocalGet(Index),
-    LocalSet(Index),
-    LocalTee(Index),
-    GlobalGet(Index),
-    GlobalSet(Index),
+    LocalGet(u32),
+    LocalSet(u32),
+    LocalTee(u32),
+    GlobalGet(u32),
+    GlobalSet(u32),
 
     // Memory instructions
     I32Load(MemoryArg),
@@ -256,22 +256,10 @@ pub enum Instruction {
     F64ReinterpretI64,
 }
 
-/// https://webassembly.github.io/spec/core/syntax/modules.html#indices
-#[derive(Debug, Copy, Clone)]
-pub enum Index {
-    Type(u32),
-    Function(u32),
-    Table(u32),
-    Memory(u32),
-    Global(u32),
-    Local(u32),
-    Label(u32),
-}
-
 /// https://webassembly.github.io/spec/core/syntax/modules.html#functions
 #[derive(Debug)]
 pub struct Function {
-    pub function_type: Index,
+    pub function_type: u32,
     pub locals: Vec<(u32, ValueType)>,
     pub body: Expression,
 }
@@ -298,15 +286,15 @@ pub struct Global {
 /// https://webassembly.github.io/spec/core/syntax/modules.html#element-segments
 #[derive(Debug)]
 pub struct Element {
-    pub table: Index,
+    pub table: u32,
     pub offset: Expression,
-    pub init: Vec<Index>,
+    pub init: Vec<u32>,
 }
 
 /// https://webassembly.github.io/spec/core/syntax/modules.html#data-segments
 #[derive(Debug)]
 pub struct Data {
-    pub data: Index,
+    pub data: u32,
     pub offset: Expression,
     pub init: Vec<u8>,
 }
@@ -314,14 +302,21 @@ pub struct Data {
 /// https://webassembly.github.io/spec/core/syntax/modules.html#start-function
 #[derive(Debug)]
 pub struct StartFunction {
-    pub function: Index,
+    pub function: u32,
 }
 
 /// https://webassembly.github.io/spec/core/syntax/modules.html#exports
 #[derive(Debug)]
 pub struct Export {
     pub name: String,
-    pub descriptor: Index,
+    pub descriptor: ExportDescriptor,
+}
+#[derive(Debug)]
+pub enum ExportDescriptor {
+    Function(u32),
+    Table(u32),
+    Memory(u32),
+    Global(u32)
 }
 
 /// https://webassembly.github.io/spec/core/syntax/modules.html#imports

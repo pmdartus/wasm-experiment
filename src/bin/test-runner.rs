@@ -192,7 +192,7 @@ fn main() {
             }
         }
 
-        println!("")
+        println!();
     }
 }
 
@@ -235,21 +235,36 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) -> Vec<TestResult
                         }),
                     }
                 }
-                // manifest::Command::AssertMalformed { line, filename, text } => {
-                //     let module_path = test_dir.join(filename);
-                //     let module_path_string  = module_path.to_str().unwrap();
+                manifest::Command::AssertMalformed { line, filename, text } => {
+                    let test_name = format!("#{} Malformed module", command_index);
 
-                //     let file = fs::read(module_path_string).unwrap();
-                //     let res = decoder::decode(&file[..]);
+                    let module_path = test_dir.join(filename);
+                    let module_path_string  = module_path.to_str().unwrap();
 
-                //     match res {
-                //         Err(_err) => println!("✅ PASS {:?}", module_path_string),
-                //         Ok(_module) => {
-                //             // println!("{:#?}", _module);
-                //             println!("❌ FAILED: {:?} (line: {:}) {}", module_path_string, line, text)
-                //         },
-                //     }
-                // }
+                    let file = fs::read(module_path_string).unwrap();
+                    let res = decoder::decode(&file[..]);
+
+                    match res {
+                        Err(_err) => Some(TestResult {
+                            test_name,
+                            line: *line,
+                            file_name: String::from(filename),
+                            state: TestState::Pass,
+                        }),
+                        Ok(_module) => Some(TestResult {
+                            test_name,
+                            line: *line,
+                            file_name: String::from(filename),
+                            state: TestState::Fail {
+                                message: format!(
+                                    "Expected malformed error: {} (file: {})",
+                                    text,
+                                    module_path_string
+                                ),
+                            },
+                        }),
+                    }
+                }
                 _ => None,
             }
         })

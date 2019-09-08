@@ -1,11 +1,6 @@
 use std::{f32, f64, fmt};
 
-use super::types::{
-    BlockType, CustomSection, Data, Element, ElementType, Export, Expression, Function,
-    FunctionType, Global, GlobalType, GlobalTypeMutability, Import, ImportDescriptor, Index,
-    Instruction, Limits, Memory, MemoryArg, MemoryType, Module, StartFunction, Table, TableType,
-    ValueType,
-};
+use super::types::*;
 
 const SECTION_ID_CUSTOM: u8 = 0;
 const SECTION_ID_TYPE: u8 = 1;
@@ -332,24 +327,24 @@ fn decode_instruction(decoder: &mut Decoder) -> DecoderResult<Instruction> {
             decoder.eat_byte()?; // end
             Instruction::If(block_type, if_instructions, else_instructions)
         }
-        0x0C => Instruction::Br(Index::Label(decode_u32(decoder)?)),
-        0x0D => Instruction::BrIf(Index::Label(decode_u32(decoder)?)),
+        0x0C => Instruction::Br(decode_u32(decoder)?),
+        0x0D => Instruction::BrIf(decode_u32(decoder)?),
         0x0E => {
             let mut labels = Vec::new();
 
             let vector_size = decode_u32(decoder)?;
             for _ in 0..vector_size {
-                labels.push(Index::Label(decode_u32(decoder)?));
+                labels.push(decode_u32(decoder)?);
             }
 
-            let default_label = Index::Label(decode_u32(decoder)?);
+            let default_label = decode_u32(decoder)?;
 
             Instruction::BrTable(labels, default_label)
         }
         0x0F => Instruction::Return,
-        0x10 => Instruction::Call(Index::Function(decode_u32(decoder)?)),
+        0x10 => Instruction::Call(decode_u32(decoder)?),
         0x11 => {
-            let index = Index::Function(decode_u32(decoder)?);
+            let index = decode_u32(decoder)?;
             if !decoder.match_byte(0x00) {
                 return Err(
                     decoder.produce_error("Invalid reserved byte after call_indirect instruction")
@@ -362,11 +357,11 @@ fn decode_instruction(decoder: &mut Decoder) -> DecoderResult<Instruction> {
         0x1A => Instruction::Drop,
         0x1B => Instruction::Select,
 
-        0x20 => Instruction::LocalGet(Index::Local(decode_u32(decoder)?)),
-        0x21 => Instruction::LocalSet(Index::Local(decode_u32(decoder)?)),
-        0x22 => Instruction::LocalTee(Index::Local(decode_u32(decoder)?)),
-        0x23 => Instruction::GlobalGet(Index::Global(decode_u32(decoder)?)),
-        0x24 => Instruction::GlobalSet(Index::Global(decode_u32(decoder)?)),
+        0x20 => Instruction::LocalGet(decode_u32(decoder)?),
+        0x21 => Instruction::LocalSet(decode_u32(decoder)?),
+        0x22 => Instruction::LocalTee(decode_u32(decoder)?),
+        0x23 => Instruction::GlobalGet(decode_u32(decoder)?),
+        0x24 => Instruction::GlobalSet(decode_u32(decoder)?),
 
         0x28 => Instruction::I32Load(decode_memory_arg(decoder)?),
         0x29 => Instruction::I64Load(decode_memory_arg(decoder)?),
@@ -644,13 +639,13 @@ fn decode_import_section(decoder: &mut Decoder) -> DecoderResult<Vec<Import>> {
 }
 
 /// https://webassembly.github.io/spec/core/binary/modules.html#binary-funcsec
-fn decode_function_section(decoder: &mut Decoder) -> DecoderResult<Vec<Index>> {
+fn decode_function_section(decoder: &mut Decoder) -> DecoderResult<Vec<u32>> {
     let mut type_indexes = Vec::new();
 
     decode_section(decoder, SECTION_ID_FUNCTION, |decoder| {
         let vector_size = decode_u32(decoder)?;
         for _ in 0..vector_size {
-            let type_index = Index::Type(decode_u32(decoder)?);
+            let type_index = decode_u32(decoder)?;
             type_indexes.push(type_index);
         }
         Ok(())
@@ -735,10 +730,10 @@ fn decode_export_section(decoder: &mut Decoder) -> DecoderResult<Vec<Export>> {
             exports.push(Export {
                 name: decode_name(decoder)?,
                 descriptor: match decoder.eat_byte()? {
-                    0x00 => Index::Type(decode_u32(decoder)?),
-                    0x01 => Index::Table(decode_u32(decoder)?),
-                    0x02 => Index::Memory(decode_u32(decoder)?),
-                    0x03 => Index::Global(decode_u32(decoder)?),
+                    0x00 => ExportDescriptor::Function(decode_u32(decoder)?),
+                    0x01 => ExportDescriptor::Table(decode_u32(decoder)?),
+                    0x02 => ExportDescriptor::Memory(decode_u32(decoder)?),
+                    0x03 => ExportDescriptor::Global(decode_u32(decoder)?),
                     _ => return Err(decoder.produce_error("Invalid export descriptor")),
                 },
             })
@@ -755,7 +750,7 @@ fn decode_start_section(decoder: &mut Decoder) -> DecoderResult<Option<StartFunc
         decoder.eat_byte()?; // section size
 
         Ok(Some(StartFunction {
-            function: Index::Function(decode_u32(decoder)?),
+            function: decode_u32(decoder)?,
         }))
     } else {
         Ok(None)
@@ -769,7 +764,7 @@ fn decode_element_section(decoder: &mut Decoder) -> DecoderResult<Vec<Element>> 
     decode_section(decoder, SECTION_ID_ELEMENT, |decoder| {
         let vector_size = decode_u32(decoder)?;
         for _ in 0..vector_size {
-            let table = Index::Table(decode_u32(decoder)?);
+            let table = decode_u32(decoder)?;
 
             let offset = decode_expression(decoder)?;
 
@@ -777,7 +772,7 @@ fn decode_element_section(decoder: &mut Decoder) -> DecoderResult<Vec<Element>> 
             let vector_size = decode_u32(decoder)?;
 
             for _ in 0..vector_size {
-                init.push(Index::Function(decode_u32(decoder)?));
+                init.push(decode_u32(decoder)?);
             }
 
             elements.push(Element {
@@ -844,7 +839,7 @@ fn decode_data_section(decoder: &mut Decoder) -> DecoderResult<Vec<Data>> {
     decode_section(decoder, SECTION_ID_DATA, |decoder| {
         let vector_size = decode_u32(decoder)?;
         for _ in 0..vector_size {
-            let data = Index::Memory(decode_u32(decoder)?);
+            let data = decode_u32(decoder)?;
             let offset = decode_expression(decoder)?;
 
             let mut init = Vec::new();
