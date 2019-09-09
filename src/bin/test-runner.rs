@@ -7,7 +7,8 @@ use std::path::Path;
 use colored::*;
 use serde_json;
 
-use weaselm::decoder;
+use weaselm::decoder::modules::{decode};
+// use weaselm::validation::modules::{validate};
 
 mod manifest {
     use serde::Deserialize;
@@ -213,7 +214,7 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) -> Vec<TestResult
                     let module_path_string = module_path.to_str().unwrap();
 
                     let file = fs::read(module_path_string).unwrap();
-                    let res = decoder::decode(&file[..]);
+                    let res = decode(&file[..]);
 
                     match res {
                         Err(err) => Some(TestResult {
@@ -242,7 +243,7 @@ fn run_manifest(test_dir: &Path, manifest: manifest::Manifest) -> Vec<TestResult
                     let module_path_string  = module_path.to_str().unwrap();
 
                     let file = fs::read(module_path_string).unwrap();
-                    let res = decoder::decode(&file[..]);
+                    let res = decode(&file[..]);
 
                     match res {
                         Err(_err) => Some(TestResult {

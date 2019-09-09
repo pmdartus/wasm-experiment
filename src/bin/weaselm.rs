@@ -2,7 +2,9 @@ use std::env;
 use std::fs;
 use std::io;
 
-use weaselm::decoder;
+// TODO: the package structure for the export
+use weaselm::decoder::modules::{decode};
+use weaselm::validation::modules::{validate};
 
 // TODO: Understand how this io package work!
 fn main() -> io::Result<()> {
@@ -13,7 +15,9 @@ fn main() -> io::Result<()> {
     };
 
     let file = fs::read(filename)?;
-    let module = decoder::decode(&file[..]);
+
+    let module = decode(&file[..]).unwrap();
+    validate(&module).unwrap();
 
     println!("{:#?}", module);
 

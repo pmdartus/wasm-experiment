@@ -1,36 +1,7 @@
-use super::types::*;
+use crate::structure::*;
+use crate::validation::validation::*;
 
-const BASE: u64 = 2;
-
-#[derive(Debug)]
-pub struct ValidationError {
-    message: String,
-}
-
-impl ValidationError {
-    fn from(message: &str) -> ValidationError {
-        ValidationError {
-            message: String::from(message),
-        }
-    }
-
-    fn from_string(message: String) -> ValidationError {
-        ValidationError { message }
-    }
-}
-
-pub type ValidationResult = Result<(), ValidationError>;
-
-#[derive(Debug)]
-struct Context<'a> {
-    function_types: &'a Vec<FunctionType>,
-    functions: &'a Vec<Function>,
-    tables: &'a Vec<Table>,
-    memories: &'a Vec<Memory>,
-    globals: &'a Vec<Global>,
-    elements: &'a Vec<Element>,
-    locals: Vec<ValueType>,
-}
+const BASE: u32 = 2;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Operand {
@@ -150,108 +121,6 @@ impl ExpressionContext {
     }
 }
 
-fn get_function_type<'a>(
-    context: &'a Context,
-    function_type_index: u32,
-) -> Result<&'a FunctionType, ValidationError> {
-    context
-        .function_types
-        .get(function_type_index as usize)
-        .ok_or(ValidationError::from("Invalid function type reference"))
-}
-
-fn get_function<'a>(
-    context: &'a Context,
-    function_index: u32,
-) -> Result<&'a Function, ValidationError> {
-    context
-        .functions
-        .get(function_index as usize)
-        .ok_or(ValidationError::from("Invalid function reference"))
-}
-
-fn get_table<'a>(context: &'a Context, table_index: u32) -> Result<&'a Table, ValidationError> {
-    context
-        .tables
-        .get(table_index as usize)
-        .ok_or(ValidationError::from("Invalid table reference"))
-}
-
-fn get_memory<'a>(context: &'a Context, memory_index: u32) -> Result<&'a Memory, ValidationError> {
-    context
-        .memories
-        .get(memory_index as usize)
-        .ok_or(ValidationError::from("Invalid memory reference"))
-}
-
-fn get_global<'a>(context: &'a Context, global_index: u32) -> Result<&'a Global, ValidationError> {
-    context
-        .globals
-        .get(global_index as usize)
-        .ok_or(ValidationError::from("Invalid global reference"))
-}
-
-fn get_local<'a>(context: &'a Context, local_index: u32) -> Result<&'a ValueType, ValidationError> {
-    context
-        .locals
-        .get(local_index as usize)
-        .ok_or(ValidationError::from("Invalid local reference"))
-}
-
-// https://webassembly.github.io/spec/core/valid/types.html#limits
-// TODO: Should we validate the range? Are we doing non-sense type casting is the range is always
-// 2^32
-fn validate_limits(limits: &Limits, range: u64) -> ValidationResult {
-    if limits.min as u64 > range {
-        return Err(ValidationError::from("Limit minimum is above valid range"));
-    }
-
-    match limits.max {
-        Some(max) => {
-            if (max as u64) > range {
-                return Err(ValidationError::from("Limit maximum is above valid range"));
-            }
-            if max < limits.min {
-                return Err(ValidationError::from("Limit maximum is below minimum"));
-            }
-
-            Ok(())
-        }
-        None => Ok(()),
-    }?;
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/types.html#valid-functype
-fn validate_function_type(function_type: &FunctionType) -> ValidationResult {
-    let (_params, returns) = function_type;
-
-    if returns.len() > 1 {
-        return Err(ValidationError::from("Too many return value"));
-    }
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/types.html#valid-tabletype
-fn validate_table_type(table_type: &TableType) -> ValidationResult {
-    // TODO: Find a better way to express this
-    validate_limits(&table_type.limits, BASE.pow(32))?;
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/types.html#valid-memtype
-fn validate_memory_type(memory_type: &MemoryType) -> ValidationResult {
-    validate_limits(&memory_type.limits, BASE.pow(16))?;
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/types.html#valid-globaltype
-fn validate_global_type(_global_type: &GlobalType) -> ValidationResult {
-    Ok(())
-}
-
 // https://webassembly.github.io/spec/core/valid/instructions.html#valid-load
 fn validate_load_instruction(
     context: &Context,
@@ -259,7 +128,7 @@ fn validate_load_instruction(
     memory_args: &MemoryArg,
     value_type: ValueType,
 ) -> ValidationResult {
-    get_memory(context, 0)?;
+    context.get_memory(0)?;
 
     let bit_width = match value_type {
         ValueType::I32 | ValueType::F32 => 32,
@@ -283,7 +152,7 @@ fn validate_load_instruction_n(
     value_type: ValueType,
     n: u32,
 ) -> ValidationResult {
-    get_memory(context, 0)?;
+    context.get_memory(0)?;
 
     if BASE.pow(memory_args.align) > (n / 8).into() {
         return Err(ValidationError::from("Invalid memory alignment"));
@@ -301,7 +170,7 @@ fn validate_store_instruction(
     memory_args: &MemoryArg,
     value_type: ValueType,
 ) -> ValidationResult {
-    get_memory(context, 0)?;
+    context.get_memory(0)?;
 
     let bit_width = match value_type {
         ValueType::I32 | ValueType::F32 => 32,
@@ -325,7 +194,7 @@ fn validate_store_instruction_n(
     value_type: ValueType,
     n: u32
 ) -> ValidationResult {
-    get_memory(context, 0)?;
+    context.get_memory(0)?;
 
     if BASE.pow(memory_args.align) > (n / 8).into() {
         return Err(ValidationError::from("Invalid memory alignment"));
@@ -438,25 +307,25 @@ fn validate_instruction(
         }
 
         Instruction::LocalGet(local_index) => {
-            let local = get_local(context, *local_index)?;
+            let local = context.get_local(*local_index)?;
             expression_context.push_operand(Operand::Value(local.clone()));
         }
         Instruction::LocalSet(local_index) => {
-            let local = get_local(context, *local_index)?;
+            let local = context.get_local(*local_index)?;
             expression_context.pop_operand_expected(&Operand::Value(local.clone()))?;
         }
         Instruction::LocalTee(local_index) => {
-            let local = get_local(context, *local_index)?;
+            let local = context.get_local(*local_index)?;
             expression_context.pop_operand_expected(&Operand::Value(local.clone()))?;
             expression_context.push_operand(Operand::Value(local.clone()));
         }
         Instruction::GlobalGet(global_index) => {
-            let global = get_global(context, *global_index)?;
+            let global = context.get_global(*global_index)?;
             let value_type = global.global_type.value_type;
             expression_context.push_operand(Operand::Value(value_type.clone()));
         }
         Instruction::GlobalSet(global_index) => {
-            let global = get_global(context, *global_index)?;
+            let global = context.get_global(*global_index)?;
 
             if global.global_type.mutability != GlobalTypeMutability::Var {
                 return Err(ValidationError::from(
@@ -553,11 +422,11 @@ fn validate_instruction(
             validate_store_instruction_n(context, expression_context, memory_args, ValueType::I64, 32)?;
         }
         Instruction::MemorySize => {
-            get_memory(context, 0)?;
+            context.get_memory(0)?;
             expression_context.push_operand(Operand::Value(ValueType::I32));
         }
         Instruction::MemoryGrow => {
-            get_memory(context, 0)?;
+            context.get_memory(0)?;
             expression_context.pop_operand_expected(&Operand::Value(ValueType::I32))?;
             expression_context.push_operand(Operand::Value(ValueType::I32));
         }
@@ -781,7 +650,7 @@ fn validate_instruction(
 }
 
 // https://webassembly.github.io/spec/core/valid/instructions.html#id31
-fn validate_expression(
+pub fn validate_expression(
     context: &Context,
     expression: &Expression,
     return_types: Vec<ValueType>,
@@ -796,7 +665,7 @@ fn validate_expression(
 }
 
 // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
-fn validate_constant_expression(context: &Context, expression: &Expression) -> ValidationResult {
+pub fn validate_constant_expression(context: &Context, expression: &Expression) -> ValidationResult {
     for instruction in expression {
         match instruction {
             Instruction::I32Const(_) => {}
@@ -804,180 +673,12 @@ fn validate_constant_expression(context: &Context, expression: &Expression) -> V
             Instruction::F32Const(_) => {}
             Instruction::F64Const(_) => {}
             Instruction::GlobalGet(global) => {
-                get_global(context, *global)?;
+                context.get_global(*global)?;
             }
             _ => {
                 return Err(ValidationError::from(
                     "Invalid instruction in constant expression",
                 ))
-            }
-        }
-    }
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-func
-fn validate_function(context: &Context, function: &Function) -> ValidationResult {
-    let function_type = get_function_type(context, function.function_type)?;
-
-    let (_params, _returns) = function_type;
-    // TODO: Validate expression
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#tables
-fn validate_table(table: &Table) -> ValidationResult {
-    validate_table_type(&table.table_type)?;
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-mem
-fn validate_memory(memory: &Memory) -> ValidationResult {
-    validate_memory_type(&memory.memory_type)?;
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-global
-fn validate_global(context: &Context, global: &Global) -> ValidationResult {
-    validate_global_type(&global.global_type)?;
-
-    validate_expression(context, &global.init, vec![global.global_type.value_type])?;
-    validate_constant_expression(context, &global.init)?;
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-elem
-fn validate_element(context: &Context, element: &Element) -> ValidationResult {
-    get_table(context, element.table)?;
-
-    // No need to validate the table type, since there is only one type of element types in table
-    // right now.
-
-    validate_expression(context, &element.offset, vec![ValueType::I32])?;
-    validate_constant_expression(context, &element.offset)?;
-
-    for init in &element.init {
-        get_function(context, *init)?;
-    }
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-data
-fn validate_data(context: &Context, data: &Data) -> ValidationResult {
-    get_memory(context, data.data)?;
-
-    validate_expression(context, &data.offset, vec![ValueType::I32])?;
-    validate_constant_expression(context, &data.offset)?;
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-start
-fn validate_start(context: &Context, start: &StartFunction) -> ValidationResult {
-    let function = get_function(context, start.function)?;
-
-    // Function type have been validated previously, we should not worry to unwrap the value.
-    let (params, returns) = get_function_type(context, function.function_type)?;
-    if !params.is_empty() || !returns.is_empty() {
-        return Err(ValidationError::from("Invalid start function"));
-    }
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-import
-fn validate_import(context: &Context, import: &Import) -> ValidationResult {
-    match &import.descriptor {
-        ImportDescriptor::Function(function) => {
-            get_function(context, *function)?;
-            Ok(())
-        }
-        ImportDescriptor::Table(table_type) => validate_table_type(table_type),
-        ImportDescriptor::Memory(memory_type) => validate_memory_type(memory_type),
-        ImportDescriptor::Global(global_type) => validate_global_type(global_type),
-    }
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#exports
-fn validate_export(context: &Context, export: &Export) -> ValidationResult {
-    match &export.descriptor {
-        ExportDescriptor::Function(function) => {
-            get_function(context, *function)?;
-        }
-        ExportDescriptor::Table(table) => {
-            get_table(context, *table)?;
-        }
-        ExportDescriptor::Memory(memory) => {
-            get_memory(context, *memory)?;
-        }
-        ExportDescriptor::Global(global) => {
-            get_global(context, *global)?;
-        }
-    };
-
-    Ok(())
-}
-
-// https://webassembly.github.io/spec/core/valid/modules.html#valid-module
-pub fn validate(module: &Module) -> ValidationResult {
-    let context = Context {
-        function_types: &module.function_types,
-        functions: &module.functions,
-        tables: &module.tables,
-        memories: &module.memories,
-        globals: &module.globals,
-        elements: &module.elements,
-        locals: vec![],
-    };
-
-    for function_type in &module.function_types {
-        validate_function_type(&function_type)?;
-    }
-    for function in &module.functions {
-        validate_function(&context, &function)?;
-    }
-    for table in &module.tables {
-        validate_table(&table)?;
-    }
-    for memory in &module.memories {
-        validate_memory(&memory)?;
-    }
-    for global in &module.globals {
-        // TODO: Use custom context
-        validate_global(&context, &global)?;
-    }
-    for element in &module.elements {
-        validate_element(&context, &element)?;
-    }
-    for data in &module.data {
-        validate_data(&context, &data)?;
-    }
-    match &module.start {
-        Some(start) => Ok(validate_start(&context, &start)?),
-        None => Ok(()),
-    }?;
-    for import in &module.imports {
-        validate_import(&context, &import)?;
-    }
-    for export in &module.exports {
-        validate_export(&context, &export)?;
-    }
-
-    if module.tables.len() > 1 {
-        return Err(ValidationError::from("Too many tables"));
-    }
-    if module.memories.len() > 1 {
-        return Err(ValidationError::from("Too many memories"));
-    }
-
-    for i in 0..module.exports.len() {
-        for j in (i + 1)..module.exports.len() {
-            if module.exports[i].name == module.exports[j].name {
-                return Err(ValidationError::from("Duplicate export names"));
             }
         }
     }

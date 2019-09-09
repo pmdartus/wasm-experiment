@@ -1,3 +1,3 @@
-pub mod types;
+pub mod structure;
 pub mod decoder;
-pub mod validate;
+pub mod validation;
