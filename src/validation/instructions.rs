@@ -70,11 +70,11 @@ impl ExpressionContext {
         }
     }
 
-    fn push_operands(&mut self, operands: Vec<Operand>) {
-        for operand in operands {
-            self.operands.push(operand);
-        }
-    }
+    // fn push_operands(&mut self, operands: Vec<Operand>) {
+    //     for operand in operands {
+    //         self.operands.push(operand);
+    //     }
+    // }
 
     fn pop_operands(&mut self, operands: &Vec<Operand>) -> ValidationResult {
         let mut clone = operands.clone();
@@ -87,14 +87,14 @@ impl ExpressionContext {
         Ok(())
     }
 
-    fn push_control(&mut self, label_types: Vec<ValueType>, end_types: Vec<ValueType>) {
-        self.frames.push(ControlFrame {
-            label_types,
-            end_types,
-            height: self.operands.len(),
-            unreachable: false,
-        });
-    }
+    // fn push_control(&mut self, label_types: Vec<ValueType>, end_types: Vec<ValueType>) {
+    //     self.frames.push(ControlFrame {
+    //         label_types,
+    //         end_types,
+    //         height: self.operands.len(),
+    //         unreachable: false,
+    //     });
+    // }
 
     // fn pop_control(&mut self) -> Result<Vec<ValueType>, ValidationError> {
     //     let frame = self.top_frame()?;
@@ -281,15 +281,15 @@ fn validate_instruction(
             expression_context.unreachable()?;
         }
         Instruction::Nop => {}
-        Instruction::Block(block_type, instructions) => {}
-        Instruction::Loop(block_type, instructions) => {}
-        Instruction::If(block_type, if_instructions, else_instructions) => {}
-        Instruction::Br(label_index) => {}
-        Instruction::BrIf(label_index) => {}
-        Instruction::BrTable(label_indexes, default_index) => {}
+        Instruction::Block(_block_type, _instructions) => {}
+        Instruction::Loop(_block_type, _instructions) => {}
+        Instruction::If(_block_type, _if_instructions, _else_instructions) => {}
+        Instruction::Br(_label_index) => {}
+        Instruction::BrIf(_label_index) => {}
+        Instruction::BrTable(_label_indexes, _default_index) => {}
         Instruction::Return => {}
-        Instruction::Call(function_index) => {}
-        Instruction::CallIndirect(function_index) => {}
+        Instruction::Call(_function_index) => {}
+        Instruction::CallIndirect(_function_index) => {}
 
         Instruction::Drop => {
             expression_context.pop_operand()?;
@@ -683,7 +683,7 @@ fn validate_instruction(
 pub fn validate_expression(
     context: &Context,
     expression: &Expression,
-    return_types: Vec<ValueType>,
+    _return_types: Vec<ValueType>,
 ) -> ValidationResult {
     let mut expression_context = ExpressionContext::new();
 

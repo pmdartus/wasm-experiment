@@ -6,7 +6,7 @@ use std::path::Path;
 use colored::*;
 
 mod manifest;
-use manifest::{Command, Manifest};
+use manifest::{Command, CommandAssertMalformed, CommandModule, Manifest};
 
 use crate::decoder::modules::decode;
 
@@ -67,84 +67,98 @@ fn get_manifests(config: &RunnerConfig) -> Vec<Manifest> {
         })
         .collect();
 
-    manifests.sort_by(|a, b| {
-        a.source_filename.cmp(&b.source_filename)
-    });
+    manifests.sort_by(|a, b| a.source_filename.cmp(&b.source_filename));
 
     manifests
 }
 
-fn run_suite(manifest: &Manifest, config: &RunnerConfig) {
+fn run_suite(manifest: &Manifest, config: &RunnerConfig) -> Vec<Option<TestResult>> {
     println!("{}", manifest.source_filename.bold());
 
-    let mut index = 0;
-
-    for command in &manifest.commands {
-        let result = match command {
-            Command::Module { line, filename } => {
-                Some(test_module_instantiation(filename, *line, config))
-            }
-            Command::AssertMalformed {
-                line,
-                filename,
-                text,
-            } => Some(test_module_malformed(filename, *line, text, config)),
-            _ => None,
-        };
-
-        if let Some(test_result) = result {
-            match test_result.state {
-                TestState::Pass => {
-                    println!("  {} {}", format!("#{}", index).green(), test_result.test_name.green());
+    manifest
+        .commands
+        .iter()
+        .enumerate()
+        .map(|(index, command)| {
+            let result = match command {
+                Command::Module(command) => Some(test_module_instantiation(command, index, config)),
+                Command::AssertMalformed(command) => {
+                    Some(test_module_malformed(command, index, config))
                 }
-                TestState::Fail { message } => {
-                    println!("  {} {}", format!("#{}", index).red(), test_result.test_name.red());
-                    println!("    {}", message.bright_black());
-                }
+                _ => None,
             };
-        }
 
-        index += 1;
-    }
+            if let Some(test_result) = &result {
+                match &test_result.state {
+                    TestState::Pass => {
+                        println!("  {}", test_result.test_name.green());
+                    }
+                    TestState::Fail { message } => {
+                        println!("  {}", test_result.test_name.red());
+                        println!("    {}", message.bright_black());
+                    }
+                };
+            }
+
+            result
+        })
+        .collect()
 }
 
-fn test_module_instantiation(file_name: &String, line: u32, config: &RunnerConfig) -> TestResult {
-    let test_name = format!("Instantiate module");
+fn test_module_instantiation(
+    command: &CommandModule,
+    index: usize,
+    config: &RunnerConfig,
+) -> TestResult {
+    let test_name = format!("#{} Instantiate module", index);
 
-    let module_path = Path::new(&config.dirname).join(file_name).into_os_string();
+    let module_path = Path::new(&config.dirname)
+        .join(&command.filename)
+        .into_os_string();
     let file = fs::read(module_path).unwrap();
 
     match decode(&file[..]) {
         Err(err) => {
             let message = format!(
                 "Expected module to instantiate but received error: {} (offset: {}, file: {})",
-                err.message, err.offset, file_name
+                err.message, err.offset, command.filename
             );
-            TestResult::fail(test_name, file_name.to_string(), line, message)
+            TestResult::fail(
+                test_name,
+                command.filename.to_string(),
+                command.line,
+                message,
+            )
         }
-        _ => TestResult::pass(test_name, file_name.to_string(), line),
+        _ => TestResult::pass(test_name, command.filename.to_string(), command.line),
     }
 }
 
 fn test_module_malformed(
-    file_name: &String,
-    line: u32,
-    text: &String,
+    command: &CommandAssertMalformed,
+    index: usize,
     config: &RunnerConfig,
 ) -> TestResult {
-    let test_name = format!("Malformed module: {}", text);
+    let test_name = format!("#{} Malformed module: {}", index, command.text);
 
-    let module_path = Path::new(&config.dirname).join(file_name).into_os_string();
+    let module_path = Path::new(&config.dirname)
+        .join(&command.filename)
+        .into_os_string();
     let file = fs::read(module_path).unwrap();
 
     match decode(&file[..]) {
         Ok(_) => {
             let message = format!(
                 "Expected module to be malformed but parsed properly (file: {})",
-                file_name
+                command.filename
             );
-            TestResult::fail(test_name, file_name.to_string(), line, message)
+            TestResult::fail(
+                test_name,
+                command.filename.to_string(),
+                command.line,
+                message,
+            )
         }
-        _ => TestResult::pass(test_name, file_name.to_string(), line),
+        _ => TestResult::pass(test_name, command.filename.to_string(), command.line),
     }
 }

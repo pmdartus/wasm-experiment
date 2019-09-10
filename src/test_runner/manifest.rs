@@ -32,11 +32,7 @@ pub enum Command {
     },
 
     #[serde(rename = "assert_malformed")]
-    AssertMalformed {
-        line: u32,
-        filename: String,
-        text: String,
-    },
+    AssertMalformed(CommandAssertMalformed),
 
     #[serde(rename = "assert_trap")]
     AssertTrap {
@@ -82,15 +78,31 @@ pub enum Command {
     },
 
     #[serde(rename = "module")]
-    Module { line: u32, filename: String },
+    Module(CommandModule),
 
     #[serde(rename = "register")]
-    Register {
-        line: u32,
-        name: Option<String>,
-        #[serde(alias = "as")]
-        alias: String,
-    },
+    Register(CommandRegister),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertMalformed {
+    pub line: u32,
+    pub filename: String,
+    pub text: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandModule {
+    pub line: u32, 
+    pub filename: String
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandRegister {
+    pub line: u32,
+    pub name: Option<String>,
+    #[serde(alias = "as")]
+    pub alias: String,
 }
 
 #[derive(Deserialize, Debug)]

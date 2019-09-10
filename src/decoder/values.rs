@@ -1,26 +1,31 @@
 use crate::decoder::decoder::{Decoder, DecoderResult};
 
+// http://webassembly.github.io/spec/core/binary/values.html#integers
 fn decode_unsigned_leb_128(decoder: &mut Decoder) -> DecoderResult<u64> {
     let mut result: u64 = 0;
-    let mut shift: u32 = 0;
+    let mut shift = 0;
 
     loop {
-        let byte = u64::from(decoder.eat_byte()?);
+        let byte = decoder.eat_byte()?;
 
         // Extract the low order 7 bits of byte, left shift the byte and add them to the current
         // result.
-        result |= (byte & 0x7f) << (shift * 7);
+        result |= ((byte & 0x7f) as u64) << shift;
+
+        // TODO: understand why it is the case
+        // https://github.com/yurydelendik/wasmparser.rs/blob/master/src/binary_reader.rs#L436-L461
+        if shift >= 25 && (byte >> (32 - shift)) != 0 {
+            return Err(decoder.produce_error("Invalid LEB 128 encoding"));
+        }
 
         // Increase the shift by one.
-        shift += 1;
+        shift += 7;
 
         // Repeat until the highest order bit (0x80) is 0.
         if (byte & 0x80) != 0x80 {
             break;
         }
     }
-
-    // TODO: validate
 
     Ok(result)
 }
