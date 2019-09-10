@@ -6,7 +6,6 @@ use std::io;
 use weaselm::decoder::modules::{decode};
 use weaselm::validation::modules::{validate};
 
-// TODO: Understand how this io package work!
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
     let filename = match args.get(1) {

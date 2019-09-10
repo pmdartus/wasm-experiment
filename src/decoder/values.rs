@@ -1,4 +1,4 @@
-use crate::decoder::decoder::*;
+use crate::decoder::decoder::{Decoder, DecoderResult};
 
 fn decode_unsigned_leb_128(decoder: &mut Decoder) -> DecoderResult<u64> {
     let mut result: u64 = 0;

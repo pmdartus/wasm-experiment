@@ -1,6 +1,6 @@
+use crate::decoder::decoder::{Decoder, DecoderResult};
+use crate::decoder::values::decode_u32;
 use crate::structure::*;
-use crate::decoder::decoder::*;
-use crate::decoder::values::*;
 
 // https://webassembly.github.io/spec/core/binary/types.html#value-types
 pub fn decode_value_type(decoder: &mut Decoder) -> DecoderResult<ValueType> {

@@ -1,8 +1,10 @@
+use crate::decoder::decoder::{Decoder, DecoderResult};
+use crate::decoder::instructions::decode_expression;
+use crate::decoder::types::{
+    decode_function_type, decode_global_type, decode_limits, decode_memory_type, decode_value_type,
+};
+use crate::decoder::values::{decode_name, decode_u32};
 use crate::structure::*;
-use crate::decoder::decoder::*;
-use crate::decoder::values::*;
-use crate::decoder::types::*;
-use crate::decoder::instructions::*;
 
 const SECTION_ID_CUSTOM: u8 = 0;
 const SECTION_ID_TYPE: u8 = 1;
@@ -17,13 +19,9 @@ const SECTION_ID_ELEMENT: u8 = 9;
 const SECTION_ID_CODE: u8 = 10;
 const SECTION_ID_DATA: u8 = 11;
 
-fn decode_section<F, R>(
-    decoder: &mut Decoder,
-    section_id: u8,
-    mut callback: F,
-) -> Result<(), DecoderError>
+fn decode_section<F, R>(decoder: &mut Decoder, section_id: u8, mut callback: F) -> DecoderResult<()>
 where
-    F: FnMut(&mut Decoder) -> Result<R, DecoderError>,
+    F: FnMut(&mut Decoder) -> DecoderResult<R>,
 {
     if decoder.match_byte(section_id) {
         let size = decode_u32(decoder)?;
@@ -52,6 +50,17 @@ fn decode_custom_sections<'a>(
         let end_offset = decoder.offset + size as usize;
 
         let name = decode_name(decoder)?;
+
+        // Before creating a new slice we need to make sure that the custom section bytes slice is 
+        // within the boundary of the original slice and also that the current offset is not 
+        // greater than the section size.
+        if decoder.offset > decoder.bytes.len()
+            || end_offset > decoder.bytes.len()
+            || decoder.offset > end_offset
+        {
+            return Err(decoder.produce_error("Invalid section size"));
+        }
+
         let bytes = &decoder.bytes[decoder.offset..end_offset];
 
         custom_sections.push((name, bytes));

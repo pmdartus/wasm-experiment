@@ -1,5 +1,5 @@
 use crate::structure::*;
-use crate::validation::validation::*;
+use crate::validation::validation::{Context, ValidationError, ValidationResult};
 
 const BASE: u32 = 2;
 
@@ -192,7 +192,7 @@ fn validate_store_instruction_n(
     expression_context: &mut ExpressionContext,
     memory_args: &MemoryArg,
     value_type: ValueType,
-    n: u32
+    n: u32,
 ) -> ValidationResult {
     context.get_memory(0)?;
 
@@ -407,19 +407,49 @@ fn validate_instruction(
             validate_store_instruction(context, expression_context, memory_args, ValueType::F64)?;
         }
         Instruction::I32Store8(memory_args) => {
-            validate_store_instruction_n(context, expression_context, memory_args, ValueType::I32, 8)?;
+            validate_store_instruction_n(
+                context,
+                expression_context,
+                memory_args,
+                ValueType::I32,
+                8,
+            )?;
         }
         Instruction::I32Store16(memory_args) => {
-            validate_store_instruction_n(context, expression_context, memory_args, ValueType::I32, 16)?;
+            validate_store_instruction_n(
+                context,
+                expression_context,
+                memory_args,
+                ValueType::I32,
+                16,
+            )?;
         }
         Instruction::I64Store8(memory_args) => {
-            validate_store_instruction_n(context, expression_context, memory_args, ValueType::I64, 8)?;
+            validate_store_instruction_n(
+                context,
+                expression_context,
+                memory_args,
+                ValueType::I64,
+                8,
+            )?;
         }
         Instruction::I64Store16(memory_args) => {
-            validate_store_instruction_n(context, expression_context, memory_args, ValueType::I64, 16)?;
+            validate_store_instruction_n(
+                context,
+                expression_context,
+                memory_args,
+                ValueType::I64,
+                16,
+            )?;
         }
         Instruction::I64Store32(memory_args) => {
-            validate_store_instruction_n(context, expression_context, memory_args, ValueType::I64, 32)?;
+            validate_store_instruction_n(
+                context,
+                expression_context,
+                memory_args,
+                ValueType::I64,
+                32,
+            )?;
         }
         Instruction::MemorySize => {
             context.get_memory(0)?;
@@ -665,7 +695,10 @@ pub fn validate_expression(
 }
 
 // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
-pub fn validate_constant_expression(context: &Context, expression: &Expression) -> ValidationResult {
+pub fn validate_constant_expression(
+    context: &Context,
+    expression: &Expression,
+) -> ValidationResult {
     for instruction in expression {
         match instruction {
             Instruction::I32Const(_) => {}

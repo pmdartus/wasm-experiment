@@ -1,17 +1,15 @@
+use crate::decoder::decoder::{Decoder, DecoderResult};
+use crate::decoder::types::decode_value_type;
+use crate::decoder::values::{decode_f32, decode_f64, decode_i32, decode_i64, decode_u32};
 use crate::structure::*;
-use crate::decoder::decoder::*;
-use crate::decoder::values::*;
-use crate::decoder::types::*;
 
 // https://webassembly.github.io/spec/core/binary/types.html#binary-blocktype
 fn decode_block_type(decoder: &mut Decoder) -> DecoderResult<BlockType> {
-    Ok(
-        if decoder.match_byte(0x40) {
-            BlockType::Void
-        } else {
-            BlockType::Return(decode_value_type(decoder)?)
-        }
-    )
+    Ok(if decoder.match_byte(0x40) {
+        BlockType::Void
+    } else {
+        BlockType::Return(decode_value_type(decoder)?)
+    })
 }
 
 // https://webassembly.github.io/spec/core/binary/instructions.html#binary-memarg
