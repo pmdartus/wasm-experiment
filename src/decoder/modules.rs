@@ -1,4 +1,4 @@
-use std::{u32};
+use std::u32;
 
 use crate::decoder::instructions::decode_expression;
 use crate::decoder::types::{
@@ -264,9 +264,7 @@ fn decode_element_section(decoder: &mut Decoder) -> DecoderResult<Vec<Element>> 
 }
 
 // https://webassembly.github.io/spec/core/binary/modules.html#code-section
-fn decode_code_section(
-    decoder: &mut Decoder,
-) -> DecoderResult<Vec<Code>> {
+fn decode_code_section(decoder: &mut Decoder) -> DecoderResult<Vec<Code>> {
     let mut codes = Vec::new();
 
     decode_section(decoder, SECTION_ID_CODE, |decoder| {

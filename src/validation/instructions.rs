@@ -229,10 +229,7 @@ fn validate_binary_instruction(
     expression_context: &mut ExpressionContext,
     value_type: ValueType,
 ) -> ValidationResult {
-    expression_context.pop_operands(&[
-        Operand::Value(value_type),
-        Operand::Value(value_type),
-    ])?;
+    expression_context.pop_operands(&[Operand::Value(value_type), Operand::Value(value_type)])?;
     expression_context.push_operand(Operand::Value(value_type));
     Ok(())
 }
@@ -252,10 +249,7 @@ fn validate_comparison_instruction(
     expression_context: &mut ExpressionContext,
     value_type: ValueType,
 ) -> ValidationResult {
-    expression_context.pop_operands(&[
-        Operand::Value(value_type),
-        Operand::Value(value_type),
-    ])?;
+    expression_context.pop_operands(&[Operand::Value(value_type), Operand::Value(value_type)])?;
     expression_context.push_operand(Operand::Value(ValueType::I32));
     Ok(())
 }
