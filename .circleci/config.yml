@@ -14,10 +14,10 @@ jobs:
           command: cargo build --verbose --all
       - run:
           name: Check formatting
-          command: cargo fmt --all
+          command: cargo fmt --all -- --check
       - run:
           name: Check linting
-          command: cargo clippy --all
+          command: cargo clippy --all -- -D warnings
       - run:
           name: Test all
           command: cargo test --verbose --all
