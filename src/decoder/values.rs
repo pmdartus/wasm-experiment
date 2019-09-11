@@ -62,7 +62,6 @@ pub fn decode_f64(decoder: &mut Decoder) -> DecoderResult<f64> {
     Ok(f64::from_bits(bits))
 }
 
-
 /// https://webassembly.github.io/spec/core/binary/values.html#binary-name
 ///
 /// The higher bits in the first byte contains a mask describing the number of byte encoding the

@@ -1,4 +1,4 @@
-use std::{env,process};
+use std::{env, process};
 
 use weaselm::test_runner::{run, RunnerConfig};
 
@@ -7,7 +7,7 @@ fn main() {
     let dirname = args.get(1).expect("No test directory found");
 
     let exit_code = run(&RunnerConfig {
-        dirname: dirname.clone()
+        dirname: dirname.clone(),
     });
 
     process::exit(exit_code);

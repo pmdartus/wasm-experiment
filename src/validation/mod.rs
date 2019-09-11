@@ -1,7 +1,7 @@
-mod validation;
-mod types;
 mod instructions;
 pub mod modules;
+mod types;
+mod validation;
 
 // use super::types::*;
 // use types::*;

@@ -51,8 +51,8 @@ fn decode_custom_sections<'a>(
 
         let name = decode_name(decoder)?;
 
-        // Before creating a new slice we need to make sure that the custom section bytes slice is 
-        // within the boundary of the original slice and also that the current offset is not 
+        // Before creating a new slice we need to make sure that the custom section bytes slice is
+        // within the boundary of the original slice and also that the current offset is not
         // greater than the section size.
         if decoder.offset > decoder.bytes.len()
             || end_offset > decoder.bytes.len()

@@ -1,4 +1,4 @@
-pub mod structure;
 pub mod decoder;
-pub mod validation;
+pub mod structure;
 pub mod test_runner;
+pub mod validation;

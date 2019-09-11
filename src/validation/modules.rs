@@ -1,8 +1,9 @@
 use crate::structure::*;
-use crate::validation::validation::{ValidationResult, ValidationError, Context};
-use crate::validation::types::{validate_table_type, validate_function_type, validate_memory_type, validate_global_type};
-use crate::validation::instructions::{validate_expression, validate_constant_expression};
-
+use crate::validation::instructions::{validate_constant_expression, validate_expression};
+use crate::validation::types::{
+    validate_function_type, validate_global_type, validate_memory_type, validate_table_type,
+};
+use crate::validation::validation::{Context, ValidationError, ValidationResult};
 
 // https://webassembly.github.io/spec/core/valid/modules.html#valid-func
 fn validate_function(context: &Context, function: &Function) -> ValidationResult {
