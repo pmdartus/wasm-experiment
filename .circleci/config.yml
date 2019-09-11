@@ -1,0 +1,26 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:1
+
+    steps:
+      - checkout
+      - run:
+          name: Install toolchain components
+          command: rustup component add rustfmt clippy
+      - run:
+          name: Build all
+          command: cargo build --verbose --all
+      - run:
+          name: Check formatting
+          command: cargo fmt --all -- --check
+      - run:
+          name: Check linting
+          command: cargo clippy --all -- -D warnings
+      - run:
+          name: Run unit tests
+          command: cargo test --verbose --all
+      - run:
+          name: Run spec tests
+          command: cargo run --bin test-runner ./tests/fixtures

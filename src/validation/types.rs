@@ -1,7 +1,7 @@
 use std::{u16, u32};
 
 use crate::structure::*;
-use crate::validation::validation::{ValidationError, ValidationResult};
+use crate::validation::{ValidationError, ValidationResult};
 
 // https://webassembly.github.io/spec/core/valid/types.html#limits
 pub fn validate_limits(limits: &Limits, range: u32) -> ValidationResult {
@@ -45,7 +45,7 @@ pub fn validate_table_type(table_type: &TableType) -> ValidationResult {
 
 // https://webassembly.github.io/spec/core/valid/types.html#valid-memtype
 pub fn validate_memory_type(memory_type: &MemoryType) -> ValidationResult {
-    validate_limits(&memory_type.limits, u16::MAX as u32)?;
+    validate_limits(&memory_type.limits, u32::from(u16::MAX))?;
     Ok(())
 }
 

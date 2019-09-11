@@ -1,9 +1,11 @@
-use crate::decoder::decoder::{Decoder, DecoderResult};
+use std::u32;
+
 use crate::decoder::instructions::decode_expression;
 use crate::decoder::types::{
     decode_function_type, decode_global_type, decode_limits, decode_memory_type, decode_value_type,
 };
 use crate::decoder::values::{decode_name, decode_u32};
+use crate::decoder::{Decoder, DecoderResult};
 use crate::structure::*;
 
 const SECTION_ID_CUSTOM: u8 = 0;
@@ -18,6 +20,8 @@ const SECTION_ID_START: u8 = 8;
 const SECTION_ID_ELEMENT: u8 = 9;
 const SECTION_ID_CODE: u8 = 10;
 const SECTION_ID_DATA: u8 = 11;
+
+type Code = (Vec<(u32, ValueType)>, Expression);
 
 fn decode_section<F, R>(decoder: &mut Decoder, section_id: u8, mut callback: F) -> DecoderResult<()>
 where
@@ -51,8 +55,8 @@ fn decode_custom_sections<'a>(
 
         let name = decode_name(decoder)?;
 
-        // Before creating a new slice we need to make sure that the custom section bytes slice is 
-        // within the boundary of the original slice and also that the current offset is not 
+        // Before creating a new slice we need to make sure that the custom section bytes slice is
+        // within the boundary of the original slice and also that the current offset is not
         // greater than the section size.
         if decoder.offset > decoder.bytes.len()
             || end_offset > decoder.bytes.len()
@@ -260,9 +264,7 @@ fn decode_element_section(decoder: &mut Decoder) -> DecoderResult<Vec<Element>> 
 }
 
 // https://webassembly.github.io/spec/core/binary/modules.html#code-section
-fn decode_code_section(
-    decoder: &mut Decoder,
-) -> DecoderResult<Vec<(Vec<(u32, ValueType)>, Expression)>> {
+fn decode_code_section(decoder: &mut Decoder) -> DecoderResult<Vec<Code>> {
     let mut codes = Vec::new();
 
     decode_section(decoder, SECTION_ID_CODE, |decoder| {
@@ -272,7 +274,7 @@ fn decode_code_section(
             let end_offset = decoder.offset + code_size as usize;
 
             let mut locals = Vec::new();
-            let mut total_local_count: u64 = 0;
+            let mut total_local_count: usize = 0;
 
             let local_vector_size = decode_u32(decoder)?;
 
@@ -280,13 +282,12 @@ fn decode_code_section(
                 let local_count = decode_u32(decoder)?;
                 let value_type = decode_value_type(decoder)?;
 
-                total_local_count += local_count as u64;
+                total_local_count += local_count as usize;
 
                 locals.push((local_count, value_type));
             }
 
-            let base: u64 = 2;
-            if total_local_count > base.pow(32) {
+            if total_local_count > u32::MAX as usize {
                 return Err(decoder.produce_error("Too many locals"));
             }
 

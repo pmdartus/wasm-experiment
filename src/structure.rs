@@ -316,7 +316,7 @@ pub enum ExportDescriptor {
     Function(u32),
     Table(u32),
     Memory(u32),
-    Global(u32)
+    Global(u32),
 }
 
 /// https://webassembly.github.io/spec/core/syntax/modules.html#imports
@@ -331,7 +331,7 @@ pub enum ImportDescriptor {
     Function(u32),
     Table(TableType),
     Memory(MemoryType),
-    Global(GlobalType)
+    Global(GlobalType),
 }
 
 pub type CustomSection<'a> = (String, &'a [u8]);

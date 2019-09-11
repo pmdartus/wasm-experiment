@@ -134,13 +134,13 @@ fn run_suite(manifest: &Manifest, config: &RunnerConfig) -> Vec<TestResult> {
 
                 Command::AssertUninstantiable(command) => TestResult::ignore(
                     format!("#{} Uninstantiable  module: {}", index, command.text),
-                    command.filename.clone().unwrap_or(String::from("")),
+                    command.filename.clone().unwrap_or_else(|| String::from("")),
                     command.line,
                 ),
 
                 Command::AssertUnlinkable(command) => TestResult::ignore(
                     format!("#{} Unlinkable module: {}", index, command.text),
-                    command.filename.clone().unwrap_or(String::from("")),
+                    command.filename.clone().unwrap_or_else(|| String::from("")),
                     command.line,
                 ),
 
@@ -243,7 +243,7 @@ fn test_module_malformed(
     }
 }
 
-fn print_report(report: &Vec<(Manifest, Vec<TestResult>)>) {
+fn print_report(report: &[(Manifest, Vec<TestResult>)]) {
     let results: Vec<&TestResult> = report.iter().flat_map(|(_, results)| results).collect();
 
     let passing_count = results
@@ -262,14 +262,14 @@ fn print_report(report: &Vec<(Manifest, Vec<TestResult>)>) {
         .filter(|r| r.state == TestState::Ignore)
         .count();
 
-    print!("\n");
+    println!();
     println!(
         "    {}",
         format!("{} passing", passing_count).bold().green()
     );
     println!("    {}", format!("{} failing", failing_count).bold().red());
     println!("    {}", format!("{} ingored", ignored_count).bold().cyan());
-    print!("\n");
+    println!();
 
     for (manifest, results) in report {
         let message = results
