@@ -134,13 +134,13 @@ fn run_suite(manifest: &Manifest, config: &RunnerConfig) -> Vec<TestResult> {
 
                 Command::AssertUninstantiable(command) => TestResult::ignore(
                     format!("#{} Uninstantiable  module: {}", index, command.text),
-                    command.filename.clone().unwrap_or(String::from("")),
+                    command.filename.clone().unwrap_or_else(|| String::from("")),
                     command.line,
                 ),
 
                 Command::AssertUnlinkable(command) => TestResult::ignore(
                     format!("#{} Unlinkable module: {}", index, command.text),
-                    command.filename.clone().unwrap_or(String::from("")),
+                    command.filename.clone().unwrap_or_else(|| String::from("")),
                     command.line,
                 ),
 

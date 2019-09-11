@@ -34,7 +34,7 @@ impl ExpressionContext {
     fn top_frame(&self) -> Result<&ControlFrame, ValidationError> {
         self.frames
             .last()
-            .ok_or(ValidationError::from("Unexpected empty frame stack"))
+            .ok_or_else(|| ValidationError::from("Unexpected empty frame stack"))
     }
 
     fn push_operand(&mut self, operand: Operand) {
@@ -49,7 +49,7 @@ impl ExpressionContext {
         } else {
             self.operands
                 .pop()
-                .ok_or(ValidationError::from("Unexpected empty operand stack"))
+                .ok_or_else(|| ValidationError::from("Unexpected empty operand stack"))
         }
     }
 
@@ -308,16 +308,16 @@ fn validate_instruction(
 
         Instruction::LocalGet(local_index) => {
             let local = context.get_local(*local_index)?;
-            expression_context.push_operand(Operand::Value(local.clone()));
+            expression_context.push_operand(Operand::Value(*local));
         }
         Instruction::LocalSet(local_index) => {
             let local = context.get_local(*local_index)?;
-            expression_context.pop_operand_expected(&Operand::Value(local.clone()))?;
+            expression_context.pop_operand_expected(&Operand::Value(*local))?;
         }
         Instruction::LocalTee(local_index) => {
             let local = context.get_local(*local_index)?;
-            expression_context.pop_operand_expected(&Operand::Value(local.clone()))?;
-            expression_context.push_operand(Operand::Value(local.clone()));
+            expression_context.pop_operand_expected(&Operand::Value(*local))?;
+            expression_context.push_operand(Operand::Value(*local));
         }
         Instruction::GlobalGet(global_index) => {
             let global = context.get_global(*global_index)?;
