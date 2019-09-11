@@ -10,78 +10,105 @@ pub struct Manifest {
 #[serde(tag = "type")]
 pub enum Command {
     #[serde(rename = "action")]
-    Action {
-        line: u32,
-        action: Action,
-        expected: Vec<Value>,
-    },
+    Action(CommandAction),
 
     #[serde(rename = "assert_exhaustion")]
-    AssertExhaustion {
-        line: u32,
-        action: Action,
-        text: String,
-        expected: Vec<Value>,
-    },
+    AssertExhaustion(CommandAssertExhaustion),
 
     #[serde(rename = "assert_invalid")]
-    AssertInvalid {
-        line: u32,
-        filename: String,
-        text: String,
-    },
+    AssertInvalid(CommandAssertInvalid),
 
     #[serde(rename = "assert_malformed")]
     AssertMalformed(CommandAssertMalformed),
 
     #[serde(rename = "assert_trap")]
-    AssertTrap {
-        line: u32,
-        action: Action,
-        text: String,
-        expected: Vec<Value>,
-    },
+    AssertTrap(CommandAssertTrap),
 
     #[serde(rename = "assert_uninstantiable")]
-    AssertUninstantiable {
-        line: u32,
-        filename: Option<String>,
-        text: String,
-    },
+    AssertUninstantiable(CommandAssertUninstantiable),
 
     #[serde(rename = "assert_unlinkable")]
-    AssertUnlinkable {
-        line: u32,
-        filename: Option<String>,
-        text: String,
-    },
+    AssertUnlinkable(CommandAssertUnlinkable),
 
     #[serde(rename = "assert_return")]
-    AssertReturn {
-        line: u32,
-        action: Action,
-        expected: Vec<Value>,
-    },
+    AssertReturn(CommandAssertReturn),
 
     #[serde(rename = "assert_return_arithmetic_nan")]
-    AssertReturnArithmeticNan {
-        line: u32,
-        action: Action,
-        expected: Vec<Value>,
-    },
+    AssertReturnArithmeticNan(CommandAssertReturnArithmeticNan),
 
     #[serde(rename = "assert_return_canonical_nan")]
-    AssertReturnCanonicalNan {
-        line: u32,
-        action: Action,
-        expected: Vec<Value>,
-    },
+    AssertReturnCanonicalNan(CommandAssertReturnCanonicalNan),
 
     #[serde(rename = "module")]
     Module(CommandModule),
 
     #[serde(rename = "register")]
     Register(CommandRegister),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAction {
+    pub line: u32,
+    pub action: Action,
+    pub expected: Vec<Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertExhaustion {
+    pub line: u32,
+    pub action: Action,
+    pub text: String,
+    pub expected: Vec<Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertInvalid {
+    pub line: u32,
+    pub filename: String,
+    pub text: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertTrap {
+    pub line: u32,
+    pub action: Action,
+    pub text: String,
+    pub expected: Vec<Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertUninstantiable {
+    pub line: u32,
+    pub filename: Option<String>,
+    pub text: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertUnlinkable {
+    pub line: u32,
+    pub filename: Option<String>,
+    pub text: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertReturn {
+    pub line: u32,
+    pub action: Action,
+    pub expected: Vec<Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertReturnArithmeticNan {
+    pub line: u32,
+    pub action: Action,
+    pub expected: Vec<Value>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct CommandAssertReturnCanonicalNan {
+    pub line: u32,
+    pub action: Action,
+    pub expected: Vec<Value>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -93,8 +120,8 @@ pub struct CommandAssertMalformed {
 
 #[derive(Deserialize, Debug)]
 pub struct CommandModule {
-    pub line: u32, 
-    pub filename: String
+    pub line: u32,
+    pub filename: String,
 }
 
 #[derive(Deserialize, Debug)]
