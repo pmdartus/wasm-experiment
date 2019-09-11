@@ -10,7 +10,7 @@ fn decode_unsigned_leb_128(decoder: &mut Decoder) -> DecoderResult<u64> {
 
         // Extract the low order 7 bits of byte, left shift the byte and add them to the current
         // result.
-        result |= ((byte & 0x7f) as u64) << shift;
+        result |= u64::from(byte & 0x7f) << shift;
 
         // TODO: understand why it is the case
         // https://github.com/yurydelendik/wasmparser.rs/blob/master/src/binary_reader.rs#L436-L461
@@ -46,7 +46,7 @@ pub fn decode_f32(decoder: &mut Decoder) -> DecoderResult<f32> {
     let mut bits: u32 = 0;
 
     for _ in 0..4 {
-        bits = (bits << 8) | decoder.eat_byte()? as u32;
+        bits = (bits << 8) | u32::from(decoder.eat_byte()?);
     }
 
     Ok(f32::from_bits(bits))
@@ -56,7 +56,7 @@ pub fn decode_f64(decoder: &mut Decoder) -> DecoderResult<f64> {
     let mut bits: u64 = 0;
 
     for _ in 0..8 {
-        bits = (bits << 8) | decoder.eat_byte()? as u64;
+        bits = (bits << 8) | u64::from(decoder.eat_byte()?);
     }
 
     Ok(f64::from_bits(bits))

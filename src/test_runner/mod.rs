@@ -243,7 +243,7 @@ fn test_module_malformed(
     }
 }
 
-fn print_report(report: &Vec<(Manifest, Vec<TestResult>)>) {
+fn print_report(report: &[(Manifest, Vec<TestResult>)]) {
     let results: Vec<&TestResult> = report.iter().flat_map(|(_, results)| results).collect();
 
     let passing_count = results

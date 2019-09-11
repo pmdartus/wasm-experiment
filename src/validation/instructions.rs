@@ -76,13 +76,13 @@ impl ExpressionContext {
     //     }
     // }
 
-    fn pop_operands(&mut self, operands: &Vec<Operand>) -> ValidationResult {
-        let mut clone = operands.clone();
-        clone.reverse();
+    fn pop_operands(&mut self, _operands: &[Operand]) -> ValidationResult {
+        // let mut clone = operands.clone();
+        // clone.reverse();
 
-        for operand in clone {
-            self.pop_operand_expected(&operand)?;
-        }
+        // for operand in clone {
+        //     self.pop_operand_expected(&operand)?;
+        // }
 
         Ok(())
     }
@@ -125,7 +125,7 @@ impl ExpressionContext {
 fn validate_load_instruction(
     context: &Context,
     expression_context: &mut ExpressionContext,
-    memory_args: &MemoryArg,
+    memory_args: MemoryArg,
     value_type: ValueType,
 ) -> ValidationResult {
     context.get_memory(0)?;
@@ -148,13 +148,13 @@ fn validate_load_instruction(
 fn validate_load_instruction_n(
     context: &Context,
     expression_context: &mut ExpressionContext,
-    memory_args: &MemoryArg,
+    memory_args: MemoryArg,
     value_type: ValueType,
     n: u32,
 ) -> ValidationResult {
     context.get_memory(0)?;
 
-    if BASE.pow(memory_args.align) > (n / 8).into() {
+    if BASE.pow(memory_args.align) > (n / 8) {
         return Err(ValidationError::from("Invalid memory alignment"));
     }
 
@@ -167,7 +167,7 @@ fn validate_load_instruction_n(
 fn validate_store_instruction(
     context: &Context,
     expression_context: &mut ExpressionContext,
-    memory_args: &MemoryArg,
+    memory_args: MemoryArg,
     value_type: ValueType,
 ) -> ValidationResult {
     context.get_memory(0)?;
@@ -190,13 +190,13 @@ fn validate_store_instruction(
 fn validate_store_instruction_n(
     context: &Context,
     expression_context: &mut ExpressionContext,
-    memory_args: &MemoryArg,
+    memory_args: MemoryArg,
     value_type: ValueType,
     n: u32,
 ) -> ValidationResult {
     context.get_memory(0)?;
 
-    if BASE.pow(memory_args.align) > (n / 8).into() {
+    if BASE.pow(memory_args.align) > (n / 8) {
         return Err(ValidationError::from("Invalid memory alignment"));
     }
 
@@ -229,7 +229,7 @@ fn validate_binary_instruction(
     expression_context: &mut ExpressionContext,
     value_type: ValueType,
 ) -> ValidationResult {
-    expression_context.pop_operands(&vec![
+    expression_context.pop_operands(&[
         Operand::Value(value_type),
         Operand::Value(value_type),
     ])?;
@@ -252,7 +252,7 @@ fn validate_comparison_instruction(
     expression_context: &mut ExpressionContext,
     value_type: ValueType,
 ) -> ValidationResult {
-    expression_context.pop_operands(&vec![
+    expression_context.pop_operands(&[
         Operand::Value(value_type),
         Operand::Value(value_type),
     ])?;
@@ -322,7 +322,7 @@ fn validate_instruction(
         Instruction::GlobalGet(global_index) => {
             let global = context.get_global(*global_index)?;
             let value_type = global.global_type.value_type;
-            expression_context.push_operand(Operand::Value(value_type.clone()));
+            expression_context.push_operand(Operand::Value(value_type));
         }
         Instruction::GlobalSet(global_index) => {
             let global = context.get_global(*global_index)?;
@@ -334,26 +334,26 @@ fn validate_instruction(
             }
 
             let value_type = global.global_type.value_type;
-            expression_context.pop_operand_expected(&Operand::Value(value_type.clone()))?;
+            expression_context.pop_operand_expected(&Operand::Value(value_type))?;
         }
 
         Instruction::I32Load(memory_args) => {
-            validate_load_instruction(context, expression_context, memory_args, ValueType::I32)?;
+            validate_load_instruction(context, expression_context, *memory_args, ValueType::I32)?;
         }
         Instruction::I64Load(memory_args) => {
-            validate_load_instruction(context, expression_context, memory_args, ValueType::I64)?;
+            validate_load_instruction(context, expression_context, *memory_args, ValueType::I64)?;
         }
         Instruction::F32Load(memory_args) => {
-            validate_load_instruction(context, expression_context, memory_args, ValueType::F32)?;
+            validate_load_instruction(context, expression_context, *memory_args, ValueType::F32)?;
         }
         Instruction::F64Load(memory_args) => {
-            validate_load_instruction(context, expression_context, memory_args, ValueType::F64)?;
+            validate_load_instruction(context, expression_context, *memory_args, ValueType::F64)?;
         }
         Instruction::I32Load8S(memory_args) | Instruction::I32Load8U(memory_args) => {
             validate_load_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I32,
                 8,
             )?;
@@ -362,7 +362,7 @@ fn validate_instruction(
             validate_load_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I32,
                 16,
             )?;
@@ -371,7 +371,7 @@ fn validate_instruction(
             validate_load_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I64,
                 8,
             )?;
@@ -380,7 +380,7 @@ fn validate_instruction(
             validate_load_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I64,
                 16,
             )?;
@@ -389,28 +389,28 @@ fn validate_instruction(
             validate_load_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I64,
                 32,
             )?;
         }
         Instruction::I32Store(memory_args) => {
-            validate_store_instruction(context, expression_context, memory_args, ValueType::I32)?;
+            validate_store_instruction(context, expression_context, *memory_args, ValueType::I32)?;
         }
         Instruction::I64Store(memory_args) => {
-            validate_store_instruction(context, expression_context, memory_args, ValueType::I64)?;
+            validate_store_instruction(context, expression_context, *memory_args, ValueType::I64)?;
         }
         Instruction::F32Store(memory_args) => {
-            validate_store_instruction(context, expression_context, memory_args, ValueType::F32)?;
+            validate_store_instruction(context, expression_context, *memory_args, ValueType::F32)?;
         }
         Instruction::F64Store(memory_args) => {
-            validate_store_instruction(context, expression_context, memory_args, ValueType::F64)?;
+            validate_store_instruction(context, expression_context, *memory_args, ValueType::F64)?;
         }
         Instruction::I32Store8(memory_args) => {
             validate_store_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I32,
                 8,
             )?;
@@ -419,7 +419,7 @@ fn validate_instruction(
             validate_store_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I32,
                 16,
             )?;
@@ -428,7 +428,7 @@ fn validate_instruction(
             validate_store_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I64,
                 8,
             )?;
@@ -437,7 +437,7 @@ fn validate_instruction(
             validate_store_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I64,
                 16,
             )?;
@@ -446,7 +446,7 @@ fn validate_instruction(
             validate_store_instruction_n(
                 context,
                 expression_context,
-                memory_args,
+                *memory_args,
                 ValueType::I64,
                 32,
             )?;
@@ -682,7 +682,7 @@ fn validate_instruction(
 // https://webassembly.github.io/spec/core/valid/instructions.html#id31
 pub fn validate_expression(
     context: &Context,
-    expression: &Expression,
+    expression: &[Instruction],
     _return_types: Vec<ValueType>,
 ) -> ValidationResult {
     let mut expression_context = ExpressionContext::new();
@@ -697,7 +697,7 @@ pub fn validate_expression(
 // https://webassembly.github.io/spec/core/valid/instructions.html#constant-expressions
 pub fn validate_constant_expression(
     context: &Context,
-    expression: &Expression,
+    expression: &[Instruction],
 ) -> ValidationResult {
     for instruction in expression {
         match instruction {
