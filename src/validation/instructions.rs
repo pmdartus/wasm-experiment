@@ -1,5 +1,5 @@
 use crate::structure::*;
-use crate::validation::validation::{Context, ValidationError, ValidationResult};
+use crate::validation::{Context, ValidationError, ValidationResult};
 
 const BASE: u32 = 2;
 

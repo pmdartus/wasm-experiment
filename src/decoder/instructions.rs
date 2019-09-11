@@ -1,6 +1,6 @@
-use crate::decoder::decoder::{Decoder, DecoderResult};
 use crate::decoder::types::decode_value_type;
 use crate::decoder::values::{decode_f32, decode_f64, decode_i32, decode_i64, decode_u32};
+use crate::decoder::{Decoder, DecoderResult};
 use crate::structure::*;
 
 // https://webassembly.github.io/spec/core/binary/types.html#binary-blocktype

@@ -1,9 +1,9 @@
-use crate::decoder::decoder::{Decoder, DecoderResult};
 use crate::decoder::instructions::decode_expression;
 use crate::decoder::types::{
     decode_function_type, decode_global_type, decode_limits, decode_memory_type, decode_value_type,
 };
 use crate::decoder::values::{decode_name, decode_u32};
+use crate::decoder::{Decoder, DecoderResult};
 use crate::structure::*;
 
 const SECTION_ID_CUSTOM: u8 = 0;

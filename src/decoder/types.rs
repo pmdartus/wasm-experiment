@@ -1,5 +1,5 @@
-use crate::decoder::decoder::{Decoder, DecoderResult};
 use crate::decoder::values::decode_u32;
+use crate::decoder::{Decoder, DecoderResult};
 use crate::structure::*;
 
 // https://webassembly.github.io/spec/core/binary/types.html#value-types

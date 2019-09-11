@@ -1,4 +1,4 @@
-use crate::decoder::decoder::{Decoder, DecoderResult};
+use crate::decoder::{Decoder, DecoderResult};
 
 // http://webassembly.github.io/spec/core/binary/values.html#integers
 fn decode_unsigned_leb_128(decoder: &mut Decoder) -> DecoderResult<u64> {

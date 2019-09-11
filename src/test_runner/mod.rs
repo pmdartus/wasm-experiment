@@ -262,14 +262,14 @@ fn print_report(report: &Vec<(Manifest, Vec<TestResult>)>) {
         .filter(|r| r.state == TestState::Ignore)
         .count();
 
-    print!("\n");
+    println!();
     println!(
         "    {}",
         format!("{} passing", passing_count).bold().green()
     );
     println!("    {}", format!("{} failing", failing_count).bold().red());
     println!("    {}", format!("{} ingored", ignored_count).bold().cyan());
-    print!("\n");
+    println!();
 
     for (manifest, results) in report {
         let message = results

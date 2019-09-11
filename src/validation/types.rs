@@ -1,7 +1,7 @@
 use std::{u16, u32};
 
 use crate::structure::*;
-use crate::validation::validation::{ValidationError, ValidationResult};
+use crate::validation::{ValidationError, ValidationResult};
 
 // https://webassembly.github.io/spec/core/valid/types.html#limits
 pub fn validate_limits(limits: &Limits, range: u32) -> ValidationResult {
